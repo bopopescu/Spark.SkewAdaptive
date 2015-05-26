@@ -1,0 +1,12 @@
+<component name="libraryTable">
+  <library name="SBT: org.roaringbitmap:RoaringBitmap:0.4.5:jar">
+    <CLASSES>
+      <root url="jar://$USER_HOME$/Desktop/spark-1.3.1/lib_managed/bundles/RoaringBitmap-0.4.5.jar!/" />
+      <root url="jar://$USER_HOME$/Desktop/spark-1.3.1/lib_managed/bundles/RoaringBitmap-0.4.5.jar!/" />
+      <root url="jar://$USER_HOME$/Desktop/spark-1.3.1/lib_managed/bundles/RoaringBitmap-0.4.5.jar!/" />
+      <root url="jar://$USER_HOME$/Desktop/spark-1.3.1/lib_managed/bundles/RoaringBitmap-0.4.5.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

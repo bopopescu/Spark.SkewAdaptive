@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module external.linked.project.id="mllib" external.linked.project.path="$MODULE_DIR$/../../mllib" external.root.project.path="$MODULE_DIR$/../../mllib" external.system.id="SBT" type="JAVA_MODULE" version="4">
+  <component name="NewModuleRootManager" LANGUAGE_LEVEL="JDK_1_6" inherit-compiler-output="false">
+    <output url="file://$MODULE_DIR$/../../mllib/target/scala-2.10/classes" />
+    <output-test url="file://$MODULE_DIR$/../../mllib/target/scala-2.10/test-classes" />
+    <exclude-output />
+    <content url="file://$MODULE_DIR$/../../mllib">
+      <sourceFolder url="file://$MODULE_DIR$/../../mllib/src/main/java" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/../../mllib/src/main/scala" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/../../mllib/target/scala-2.10/src_managed/main" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/../../mllib/src/test/java" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/../../mllib/src/test/scala" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/../../mllib/target/scala-2.10/src_managed/test" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/../../mllib/src/main/resources" type="java-resource" />
+      <sourceFolder url="file://$MODULE_DIR$/../../mllib/target/scala-2.10/resource_managed/main" type="java-resource" />
+      <sourceFolder url="file://$MODULE_DIR$/../../mllib/src/test/resources" type="java-test-resource" />
+      <sourceFolder url="file://$MODULE_DIR$/../../mllib/target/scala-2.10/resource_managed/test" type="java-test-resource" />
+      <excludeFolder url="file://$MODULE_DIR$/../../mllib/target" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="module" module-name="core" exported="" />
+    <orderEntry type="module" module-name="graphx" exported="" />
+    <orderEntry type="module" module-name="sql" exported="" />
+    <orderEntry type="module" module-name="streaming" exported="" />
+    <orderEntry type="library" name="SBT: org.scala-lang:scala-library:2.10.4:jar" level="project" />
+    <orderEntry type="module" module-name="core" />
+    <orderEntry type="module" module-name="network-common" />
+    <orderEntry type="module" module-name="network-shuffle" />
+    <orderEntry type="module" module-name="streaming" />
+    <orderEntry type="module" module-name="sql" />
+    <orderEntry type="module" module-name="catalyst" />
+    <orderEntry type="module" module-name="graphx" />
+    <orderEntry type="module" module-name="streaming" scope="TEST" production-on-test="" />
+  </component>
+</module>
