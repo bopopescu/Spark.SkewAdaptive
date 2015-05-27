@@ -67,6 +67,10 @@ if [[ ! $EXAMPLE_CLASS == org.apache.spark.examples* ]]; then
   EXAMPLE_CLASS="org.apache.spark.examples.$EXAMPLE_CLASS"
 fi
 
+echo $EXAMPLE_MASTER
+echo $EXAMPLE_CLASS
+echo $SPARK_EXAMPLES_JAR"
+
 "$FWDIR"/bin/spark-submit \
   --master $EXAMPLE_MASTER \
   --class $EXAMPLE_CLASS \
