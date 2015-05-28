@@ -1,15 +1,52 @@
-[debug] 
-[debug] Initial source changes: 
-[debug] 	removed:Set()
-[debug] 	added: Set()
-[debug] 	modified: Set()
-[debug] Removed products: Set()
-[debug] External API changes: API Changes: Set()
-[debug] Modified binary dependencies: Set()
-[debug] Initial directly invalidated sources: Set()
-[debug] 
-[debug] Sources indirectly invalidated by:
-[debug] 	product: Set()
-[debug] 	binary dep: Set()
-[debug] 	external source: Set()
-[debug] All initially invalidated sources: Set()
+[0m[[0mdebug[0m] [0mInvalidating C:\Program Files\Java\jdk1.7.0_01\jre\lib\rt.jar: class java.lang.Object now provided by /usr/lib/jvm/java-7-openjdk-amd64/jre/lib/rt.jar[0m
+[0m[[0mdebug[0m] [0mInvalidating E:\我的文档\.ivy2\cache\org.scalariform\scalariform_2.10\jars\scalariform_2.10-0.1.4.jar: class scalariform.lexer.Token$ now provided by /home/spark/.ivy2/cache/org.scalariform/scalariform_2.10/jars/scalariform_2.10-0.1.4.jar[0m
+[0m[[0mdebug[0m] [0mInvalidating E:\我的文档\.ivy2\cache\org.scalastyle\scalastyle_2.10\jars\scalastyle_2.10-0.4.0.jar: class org.scalastyle.ScalariformChecker now provided by /home/spark/.ivy2/cache/org.scalastyle/scalastyle_2.10/jars/scalastyle_2.10-0.4.0.jar[0m
+[0m[[0mdebug[0m] [0mInvalidating E:\我的文档\.sbt\boot\scala-2.10.4\lib\scala-library.jar: class scala.collection.immutable.List$ now provided by /home/spark/.sbt/boot/scala-2.10.4/lib/scala-library.jar[0m
+[0m[[0mdebug[0m] [0m[0m
+[0m[[0mdebug[0m] [0mInitial source changes: [0m
+[0m[[0mdebug[0m] [0m	removed:Set(E:\我的文档\Desktop\spark-1.3.1\project\spark-style\src\main\scala\org\apache\spark\scalastyle\NonASCIICharacterChecker.scala)[0m
+[0m[[0mdebug[0m] [0m	added: Set(/home/spark/spark-1.3.1/project/spark-style/src/main/scala/org/apache/spark/scalastyle/NonASCIICharacterChecker.scala)[0m
+[0m[[0mdebug[0m] [0m	modified: Set()[0m
+[0m[[0mdebug[0m] [0mRemoved products: Set(E:\我的文档\Desktop\spark-1.3.1\project\spark-style\target\scala-2.10\classes\org\apache\spark\scalastyle\NonASCIICharacterChecker$$anonfun$verify$1.class, E:\我的文档\Desktop\spark-1.3.1\project\spark-style\target\scala-2.10\classes\org\apache\spark\scalastyle\NonASCIICharacterChecker$$anonfun$verify$2.class, E:\我的文档\Desktop\spark-1.3.1\project\spark-style\target\scala-2.10\classes\org\apache\spark\scalastyle\NonASCIICharacterChecker.class)[0m
+[0m[[0mdebug[0m] [0mExternal API changes: API Changes: Set()[0m
+[0m[[0mdebug[0m] [0mModified binary dependencies: Set(C:\Program Files\Java\jdk1.7.0_01\jre\lib\rt.jar, E:\我的文档\.ivy2\cache\org.scalariform\scalariform_2.10\jars\scalariform_2.10-0.1.4.jar, E:\我的文档\.ivy2\cache\org.scalastyle\scalastyle_2.10\jars\scalastyle_2.10-0.4.0.jar, E:\我的文档\.sbt\boot\scala-2.10.4\lib\scala-library.jar)[0m
+[0m[[0mdebug[0m] [0mInitial directly invalidated sources: Set(E:\我的文档\Desktop\spark-1.3.1\project\spark-style\src\main\scala\org\apache\spark\scalastyle\NonASCIICharacterChecker.scala, /home/spark/spark-1.3.1/project/spark-style/src/main/scala/org/apache/spark/scalastyle/NonASCIICharacterChecker.scala)[0m
+[0m[[0mdebug[0m] [0m[0m
+[0m[[0mdebug[0m] [0mSources indirectly invalidated by:[0m
+[0m[[0mdebug[0m] [0m	product: Set(E:\我的文档\Desktop\spark-1.3.1\project\spark-style\src\main\scala\org\apache\spark\scalastyle\NonASCIICharacterChecker.scala)[0m
+[0m[[0mdebug[0m] [0m	binary dep: Set(E:\我的文档\Desktop\spark-1.3.1\project\spark-style\src\main\scala\org\apache\spark\scalastyle\NonASCIICharacterChecker.scala)[0m
+[0m[[0mdebug[0m] [0m	external source: Set()[0m
+[0m[[0mdebug[0m] [0mAll initially invalidated sources: Set(E:\我的文档\Desktop\spark-1.3.1\project\spark-style\src\main\scala\org\apache\spark\scalastyle\NonASCIICharacterChecker.scala, /home/spark/spark-1.3.1/project/spark-style/src/main/scala/org/apache/spark/scalastyle/NonASCIICharacterChecker.scala)[0m
+[0m[[0mdebug[0m] [0mRecompiling all 1 sources: invalidated sources (2) exceeded 50.0% of all sources[0m
+[0m[[0minfo[0m] [0mCompiling 1 Scala source to /home/spark/spark-1.3.1/project/spark-style/target/scala-2.10/classes...[0m
+[0m[[0mdebug[0m] [0mGetting compiler-interface from component compiler for Scala 2.10.4[0m
+[0m[[0mdebug[0m] [0mGetting compiler-interface from component compiler for Scala 2.10.4[0m
+[0m[[0mdebug[0m] [0mRunning cached compiler 16040509, interfacing (CompilerInterface) with Scala compiler version 2.10.4[0m
+[0m[[0mdebug[0m] [0mCalling Scala compiler with arguments  (CompilerInterface):[0m
+[0m[[0mdebug[0m] [0m	-unchecked[0m
+[0m[[0mdebug[0m] [0m	-deprecation[0m
+[0m[[0mdebug[0m] [0m	-bootclasspath[0m
+[0m[[0mdebug[0m] [0m	/usr/lib/jvm/java-7-openjdk-amd64/jre/lib/resources.jar:/usr/lib/jvm/java-7-openjdk-amd64/jre/lib/rt.jar:/usr/lib/jvm/java-7-openjdk-amd64/jre/lib/sunrsasign.jar:/usr/lib/jvm/java-7-openjdk-amd64/jre/lib/jsse.jar:/usr/lib/jvm/java-7-openjdk-amd64/jre/lib/jce.jar:/usr/lib/jvm/java-7-openjdk-amd64/jre/lib/charsets.jar:/usr/lib/jvm/java-7-openjdk-amd64/jre/lib/rhino.jar:/usr/lib/jvm/java-7-openjdk-amd64/jre/lib/jfr.jar:/usr/lib/jvm/java-7-openjdk-amd64/jre/classes:/home/spark/.sbt/boot/scala-2.10.4/lib/scala-library.jar[0m
+[0m[[0mdebug[0m] [0m	-classpath[0m
+[0m[[0mdebug[0m] [0m	/home/spark/spark-1.3.1/project/spark-style/target/scala-2.10/classes:/home/spark/.ivy2/cache/org.scalastyle/scalastyle_2.10/jars/scalastyle_2.10-0.4.0.jar:/home/spark/.ivy2/cache/org.scalariform/scalariform_2.10/jars/scalariform_2.10-0.1.4.jar:/home/spark/.ivy2/cache/com.github.scopt/scopt_2.10/jars/scopt_2.10-3.2.0.jar[0m
+[0m[[0mdebug[0m] [0mScala compilation took 5.227345499 s[0m
+[0m[[0mdebug[0m] [0mInvalidating /home/spark/spark-1.3.1/project/spark-style/src/main/scala/org/apache/spark/scalastyle/NonASCIICharacterChecker.scala...[0m
+[0m[[0mdebug[0m] [0mInvalidating (transitively) by inheritance from /home/spark/spark-1.3.1/project/spark-style/src/main/scala/org/apache/spark/scalastyle/NonASCIICharacterChecker.scala...[0m
+[0m[[0mdebug[0m] [0mInitial set of included nodes: Set(/home/spark/spark-1.3.1/project/spark-style/src/main/scala/org/apache/spark/scalastyle/NonASCIICharacterChecker.scala)[0m
+[0m[[0mdebug[0m] [0mInvalidated by transitive inheritance dependency: Set(/home/spark/spark-1.3.1/project/spark-style/src/main/scala/org/apache/spark/scalastyle/NonASCIICharacterChecker.scala)[0m
+[0m[[0mdebug[0m] [0mThe /home/spark/spark-1.3.1/project/spark-style/src/main/scala/org/apache/spark/scalastyle/NonASCIICharacterChecker.scala source file has the following regular definitions changed:[0m
+[0m[[0mdebug[0m] [0m	notify, setCustomMessage, verify, customErrorKey, toStyleError, wait, $asInstanceOf, setLevel, equals, asInstanceOf, errorKey, getString, synchronized, $isInstanceOf, customMessage, notifyAll, isInstanceOf, <init>, NonASCIICharacterChecker, hasNonAsciiChars, ==, setCustomErrorKey, clone, getInt, charsBetweenTokens, toString, getBoolean, !=, isObject, getClass, isNotObject, setParameters, ne, parameters, eq, ##, finalize, hashCode, level.[0m
+[0m[[0mdebug[0m] [0mAll member reference dependencies will be considered within this context.[0m
+[0m[[0mdebug[0m] [0mInvalidating E:\我的文档\Desktop\spark-1.3.1\project\spark-style\src\main\scala\org\apache\spark\scalastyle\NonASCIICharacterChecker.scala...[0m
+[0m[[0mdebug[0m] [0mInvalidating (transitively) by inheritance from E:\我的文档\Desktop\spark-1.3.1\project\spark-style\src\main\scala\org\apache\spark\scalastyle\NonASCIICharacterChecker.scala...[0m
+[0m[[0mdebug[0m] [0mInitial set of included nodes: Set(E:\我的文档\Desktop\spark-1.3.1\project\spark-style\src\main\scala\org\apache\spark\scalastyle\NonASCIICharacterChecker.scala)[0m
+[0m[[0mdebug[0m] [0mInvalidated by transitive inheritance dependency: Set(E:\我的文档\Desktop\spark-1.3.1\project\spark-style\src\main\scala\org\apache\spark\scalastyle\NonASCIICharacterChecker.scala)[0m
+[0m[[0mdebug[0m] [0mThe E:\我的文档\Desktop\spark-1.3.1\project\spark-style\src\main\scala\org\apache\spark\scalastyle\NonASCIICharacterChecker.scala source file has the following regular definitions changed:[0m
+[0m[[0mdebug[0m] [0m	notify, setCustomMessage, verify, customErrorKey, toStyleError, wait, $asInstanceOf, setLevel, equals, asInstanceOf, errorKey, getString, synchronized, $isInstanceOf, customMessage, notifyAll, isInstanceOf, <init>, NonASCIICharacterChecker, hasNonAsciiChars, ==, setCustomErrorKey, clone, getInt, charsBetweenTokens, toString, getBoolean, !=, isObject, getClass, isNotObject, setParameters, ne, parameters, eq, ##, finalize, hashCode, level.[0m
+[0m[[0mdebug[0m] [0mAll member reference dependencies will be considered within this context.[0m
+[0m[[0mdebug[0m] [0mNew invalidations:[0m
+[0m[[0mdebug[0m] [0m	Set()[0m
+[0m[[0mdebug[0m] [0mInitial set of included nodes: Set()[0m
+[0m[[0mdebug[0m] [0mPreviously invalidated, but (transitively) depend on new invalidations:[0m
+[0m[[0mdebug[0m] [0m	Set()[0m
+[0m[[0mdebug[0m] [0mAll newly invalidated sources after taking into account (previously) recompiled sources:Set()[0m
