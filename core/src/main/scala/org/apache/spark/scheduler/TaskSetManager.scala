@@ -623,6 +623,12 @@ private[spark] class TaskSetManager(
       tasksSuccessful += 1
       logInfo("Finished task %s in stage %s (TID %d) in %d ms on %s (%d/%d)".format(
         info.id, taskSet.id, info.taskId, info.duration, info.host, tasksSuccessful, numTasks))
+      //@@@@输出Task的shuffleRead和shuffleWrite
+      logInfo("@@@@ShuffleRemoteRead: "+result.metrics.shuffleReadMetrics.get.remoteBytesRead)
+      logInfo("@@@@ShuffleLocalRead: "+result.metrics.shuffleReadMetrics.get.localBytesRead)
+      logInfo("@@@@ShuffleWrite: "+result.metrics.shuffleWriteMetrics.get.shuffleBytesWritten)
+      logInfo("@@@@ShuffleWriteRecords: "+result.metrics.shuffleWriteMetrics.get.shuffleRecordsWritten)
+      //END
       // Mark successful and stop if all the tasks have succeeded.
       successful(index) = true
       if (tasksSuccessful == numTasks) {

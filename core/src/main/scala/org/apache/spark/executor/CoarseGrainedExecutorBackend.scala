@@ -19,6 +19,8 @@ package org.apache.spark.executor
 
 import java.net.URL
 import java.nio.ByteBuffer
+import java.text.SimpleDateFormat
+import java.util.Date
 
 import scala.collection.mutable
 import scala.concurrent.Await
@@ -77,6 +79,10 @@ private[spark] class CoarseGrainedExecutorBackend(
         logError("Received LaunchTask command but executor was null")
         System.exit(1)
       } else {
+        //@@@@ 增加Task启动时间和Executor ID
+        logInfo("@@@@ExecutorID: "+executorId+" to launch task,time: "+(new SimpleDateFormat("dd日HH时mm分ss秒SSS毫秒")).format(System.currentTimeMillis()))
+        logInfo("@@@@StartMilliTime: "+System.currentTimeMillis())
+        //END
         val ser = env.closureSerializer.newInstance()
         val taskDesc = ser.deserialize[TaskDescription](data.value)
         logInfo("Got assigned task " + taskDesc.taskId)
