@@ -1,3 +1,8 @@
+#logs
+logs/
+work/
+
+
 #maven
 target/
 **/target/
