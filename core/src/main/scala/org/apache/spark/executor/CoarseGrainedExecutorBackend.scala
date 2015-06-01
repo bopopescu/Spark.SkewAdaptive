@@ -79,13 +79,13 @@ private[spark] class CoarseGrainedExecutorBackend(
         logError("Received LaunchTask command but executor was null")
         System.exit(1)
       } else {
-        //@@@@ 增加Task启动时间和Executor ID
-        logInfo("@@@@ExecutorID: "+executorId+" to launch task,time: "+(new SimpleDateFormat("dd日HH时mm分ss秒SSS毫秒")).format(System.currentTimeMillis()))
-        logInfo("@@@@StartMilliTime: "+System.currentTimeMillis())
-        //END
         val ser = env.closureSerializer.newInstance()
         val taskDesc = ser.deserialize[TaskDescription](data.value)
         logInfo("Got assigned task " + taskDesc.taskId)
+        //@@@@ （在反序列化后）增加Task启动时间和Executor ID
+        logInfo("@@@@ExecutorID: "+executorId+" to launch task "+taskDesc.name+",startTime: "+(new SimpleDateFormat("dd日HH时mm分ss秒SSS毫秒")).format(System.currentTimeMillis())
+                +" StartMilliTime: "+System.currentTimeMillis())
+        //END
         executor.launchTask(this, taskId = taskDesc.taskId, attemptNumber = taskDesc.attemptNumber,
           taskDesc.name, taskDesc.serializedTask)
       }
