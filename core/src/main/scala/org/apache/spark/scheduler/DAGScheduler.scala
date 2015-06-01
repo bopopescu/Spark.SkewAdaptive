@@ -790,6 +790,8 @@ class DAGScheduler(
 
   /** Called when stage's parents are available and we can now do its task. */
   private def submitMissingTasks(stage: Stage, jobId: Int) {
+    logInfo(s"@@@@Stage $stage ,Partitions Number: "+stage.numPartitions)
+
     logDebug("submitMissingTasks(" + stage + ")")
     // Get our pending tasks and remember them in our pendingTasks entry
     stage.pendingTasks.clear()
