@@ -1,42 +1,52 @@
-  [INFO ] [2015-06-01 13:38:21] Final stage: Stage 3(collect at SparkPageRank.scala:71)
-  [INFO ] [2015-06-01 13:38:21] Parents of final stage: List(Stage 2)
-  [INFO ] [2015-06-01 13:38:21] Missing parents: List(Stage 2)
-  [INFO ] [2015-06-01 13:38:21] Submitting 1 missing tasks from Stage 0 (MapPartitionsRDD[3] at distinct at SparkPageRank.scala:60)
-  [INFO ] [2015-06-01 13:38:23] @@@@ExecutorID: 3 to launch task,time: 01日13时38分23秒265毫秒
-  [INFO ] [2015-06-01 13:38:23] @@@@StartMilliTime: 1433137103266
-  [INFO ] [2015-06-01 13:38:23] Got assigned task 0
-  [INFO ] [2015-06-01 13:38:23] Running task 0.0 in stage 0.0 (TID 0)
-  [INFO ] [2015-06-01 13:38:24] Finished task 0.0 in stage 0.0 (TID 0). 1920 bytes result sent to driver
-  [INFO ] [2015-06-01 13:38:24] Finished task 0.0 in stage 0.0 (TID 0) in 1496 ms on spark1 (1/1)
-  [INFO ] [2015-06-01 13:38:24] Missing parents for Stage 1: List()
-  [INFO ] [2015-06-01 13:38:24] Missing parents for Stage 2: List(Stage 1)
-  [INFO ] [2015-06-01 13:38:24] Missing parents for Stage 3: List(Stage 2)
-  [INFO ] [2015-06-01 13:38:24] Submitting 1 missing tasks from Stage 1 (MapPartitionsRDD[5] at distinct at SparkPageRank.scala:60)
-  [INFO ] [2015-06-01 13:38:24] @@@@ExecutorID: 3 to launch task,time: 01日13时38分24秒635毫秒
-  [INFO ] [2015-06-01 13:38:24] @@@@StartMilliTime: 1433137104636
-  [INFO ] [2015-06-01 13:38:24] Got assigned task 1
-  [INFO ] [2015-06-01 13:38:24] Running task 0.0 in stage 1.0 (TID 1)
-  [INFO ] [2015-06-01 13:38:24] Finished task 0.0 in stage 1.0 (TID 1). 1014 bytes result sent to driver
-  [INFO ] [2015-06-01 13:38:25] Missing parents for Stage 2: List()
-  [INFO ] [2015-06-01 13:38:25] Finished task 0.0 in stage 1.0 (TID 1) in 367 ms on spark1 (1/1)
-  [INFO ] [2015-06-01 13:38:25] @@@@ShuffleRemoteRead: 0
-  [INFO ] [2015-06-01 13:38:25] @@@@ShuffleLocalRead: 64
-  [INFO ] [2015-06-01 13:38:25] @@@@ShuffleWrite: 66
-  [INFO ] [2015-06-01 13:38:25] @@@@ShuffleWriteRecords: 6
-  [INFO ] [2015-06-01 13:38:25] Missing parents for Stage 3: List(Stage 2)
-  [INFO ] [2015-06-01 13:38:25] Submitting 1 missing tasks from Stage 2 (MapPartitionsRDD[12] at flatMap at SparkPageRank.scala:64)
-  [INFO ] [2015-06-01 13:38:27] Missing parents for Stage 3: List()
-  [INFO ] [2015-06-01 13:38:27] Finished task 0.0 in stage 2.0 (TID 2) in 2216 ms on spark4 (1/1)
-  [INFO ] [2015-06-01 13:38:27] @@@@ShuffleRemoteRead: 66
-  [INFO ] [2015-06-01 13:38:27] @@@@ShuffleLocalRead: 0
-  [INFO ] [2015-06-01 13:38:27] @@@@ShuffleWrite: 62
-  [INFO ] [2015-06-01 13:38:27] @@@@ShuffleWriteRecords: 4
-  [INFO ] [2015-06-01 13:38:27] Submitting 1 missing tasks from Stage 3 (MapPartitionsRDD[14] at mapValues at SparkPageRank.scala:68)
-  [INFO ] [2015-06-01 13:38:27] @@@@ExecutorID: 3 to launch task,time: 01日13时38分27秒400毫秒
-  [INFO ] [2015-06-01 13:38:27] @@@@StartMilliTime: 1433137107401
-  [INFO ] [2015-06-01 13:38:27] Got assigned task 3
-  [INFO ] [2015-06-01 13:38:27] Running task 0.0 in stage 3.0 (TID 3)
-  [INFO ] [2015-06-01 13:38:27] Finished task 0.0 in stage 3.0 (TID 3). 918 bytes result sent to driver
-  [INFO ] [2015-06-01 13:38:27] Finished task 0.0 in stage 3.0 (TID 3) in 350 ms on spark1 (1/1)
-  [INFO ] [2015-06-01 13:38:27] @@@@ShuffleRemoteRead: 62
-  [INFO ] [2015-06-01 13:38:27] @@@@ShuffleLocalRead: 0
+15/06/03 16:32:18 INFO DAGScheduler: Final stage: Stage 3(collect at SparkPageRank.scala:71)
+15/06/03 16:32:18 INFO DAGScheduler: Parents of final stage: List(Stage 2)
+15/06/03 16:32:18 INFO DAGScheduler: Missing parents: List(Stage 2)
+15/06/03 16:32:18 INFO DAGScheduler: Submitting 1 missing tasks from Stage 0 (MapPartitionsRDD[3] at distinct at SparkPageRank.scala:60)
+15/06/03 16:32:22 INFO TaskSetManager: Finished task 0.0 in stage 0.0 (TID 0) in 2442 ms on spark3 (1/1)
+15/06/03 16:32:22 INFO DAGScheduler: Missing parents for Stage 1: List()
+15/06/03 16:32:22 INFO DAGScheduler: Missing parents for Stage 2: List(Stage 1)
+15/06/03 16:32:22 INFO DAGScheduler: Missing parents for Stage 3: List(Stage 2)
+15/06/03 16:32:22 INFO DAGScheduler: Submitting 1 missing tasks from Stage 1 (MapPartitionsRDD[5] at distinct at SparkPageRank.scala:60)
+15/06/03 16:32:22 INFO DAGScheduler: Missing parents for Stage 2: List()
+15/06/03 16:32:22 INFO DAGScheduler: Missing parents for Stage 3: List(Stage 2)
+15/06/03 16:32:22 INFO TaskSetManager: Finished task 0.0 in stage 1.0 (TID 1) in 145 ms on spark3 (1/1)
+15/06/03 16:32:22 INFO TaskSetManager: @@@@ShuffleRemoteRead: 0
+15/06/03 16:32:22 INFO TaskSetManager: @@@@ShuffleLocalRead: 64
+15/06/03 16:32:22 INFO TaskSetManager: @@@@ShuffleWrite: 66
+15/06/03 16:32:22 INFO TaskSetManager: @@@@ShuffleWriteRecords: 6
+15/06/03 16:32:22 INFO DAGScheduler: Submitting 1 missing tasks from Stage 2 (MapPartitionsRDD[12] at flatMap at SparkPageRank.scala:64)
+15/06/03 16:32:23 INFO TaskSetManager: Finished task 0.0 in stage 2.0 (TID 2) in 193 ms on spark3 (1/1)
+15/06/03 16:32:23 INFO TaskSetManager: @@@@ShuffleRemoteRead: 0
+15/06/03 16:32:23 INFO TaskSetManager: @@@@ShuffleLocalRead: 66
+15/06/03 16:32:23 INFO TaskSetManager: @@@@ShuffleWrite: 62
+15/06/03 16:32:23 INFO TaskSetManager: @@@@ShuffleWriteRecords: 4
+15/06/03 16:32:23 INFO DAGScheduler: Missing parents for Stage 3: List()
+15/06/03 16:32:23 INFO DAGScheduler: Submitting 1 missing tasks from Stage 3 (MapPartitionsRDD[14] at mapValues at SparkPageRank.scala:68)
+15/06/03 16:32:23 INFO TaskSetManager: Finished task 0.0 in stage 3.0 (TID 3) in 156 ms on spark3 (1/1)
+15/06/03 16:32:23 INFO TaskSetManager: @@@@ShuffleRemoteRead: 0
+15/06/03 16:32:23 INFO TaskSetManager: @@@@ShuffleLocalRead: 62
+  [INFO ] [2015-06-03 16:34:24] Submitting 1 missing tasks from Stage 0 (MapPartitionsRDD[3] at distinct at SparkPageRank.scala:60)
+  [INFO ] [2015-06-03 16:34:26] @@@@ExecutorID: 1 to launch task,time: 03日16时34分26秒500毫秒
+  [INFO ] [2015-06-03 16:34:26] @@@@StartMilliTime: 1433320466501
+  [INFO ] [2015-06-03 16:34:26] Got assigned task 0
+  [INFO ] [2015-06-03 16:34:26] Running task 0.0 in stage 0.0 (TID 0)
+  [INFO ] [2015-06-03 16:34:30] Finished task 0.0 in stage 1.0 (TID 1). 1014 bytes result sent to driver
+  [INFO ] [2015-06-03 16:34:30] Finished task 0.0 in stage 1.0 (TID 1) in 1917 ms on spark4 (1/1)
+  [INFO ] [2015-06-03 16:34:30] @@@@ShuffleRemoteRead: 64
+  [INFO ] [2015-06-03 16:34:30] @@@@ShuffleLocalRead: 0
+  [INFO ] [2015-06-03 16:34:30] @@@@ShuffleWrite: 66
+  [INFO ] [2015-06-03 16:34:30] @@@@ShuffleWriteRecords: 6
+  [INFO ] [2015-06-03 16:34:30] Missing parents for Stage 2: List()
+  [INFO ] [2015-06-03 16:34:30] Missing parents for Stage 3: List(Stage 2)
+  [INFO ] [2015-06-03 16:34:30] Submitting 1 missing tasks from Stage 2 (MapPartitionsRDD[12] at flatMap at SparkPageRank.scala:64)
+  [INFO ] [2015-06-03 16:34:30] @@@@ExecutorID: 1 to launch task,time: 03日16时34分30秒778毫秒
+  [INFO ] [2015-06-03 16:34:30] @@@@StartMilliTime: 1433320470778
+  [INFO ] [2015-06-03 16:34:30] Got assigned task 2
+  [INFO ] [2015-06-03 16:34:30] Running task 0.0 in stage 2.0 (TID 2)
+  [INFO ] [2015-06-03 16:34:31] Finished task 0.0 in stage 2.0 (TID 2). 2705 bytes result sent to driver
+  [INFO ] [2015-06-03 16:34:31] Submitting 1 missing tasks from Stage 3 (MapPartitionsRDD[14] at mapValues at SparkPageRank.scala:68)
+  [INFO ] [2015-06-03 16:34:31] @@@@ExecutorID: 2 to launch task,time: 03日16时34分31秒471毫秒
+  [INFO ] [2015-06-03 16:34:31] @@@@StartMilliTime: 1433320471473
+  [INFO ] [2015-06-03 16:34:31] Got assigned task 3
+  [INFO ] [2015-06-03 16:34:31] Running task 0.0 in stage 3.0 (TID 3)
+  [INFO ] [2015-06-03 16:34:33] Finished task 0.0 in stage 3.0 (TID 3). 918 bytes result sent to driver
