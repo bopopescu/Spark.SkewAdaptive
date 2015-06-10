@@ -69,7 +69,7 @@ object MyPageRank {
       case (uid, attrList, Some(pr)) => (pr, attrList.toList)
       case (uid, attrList, None) => (0.0, attrList.toList)
     }
-
+    println("###############RESULT####################")
     println(userInfoWithPageRank.vertices.top(5)(Ordering.by(_._2._1)).mkString("\n"))
 
     sc.stop()
