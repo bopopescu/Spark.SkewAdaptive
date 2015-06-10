@@ -19,8 +19,6 @@ package org.apache.spark.executor
 
 import java.net.URL
 import java.nio.ByteBuffer
-import java.text.SimpleDateFormat
-import java.util.Date
 
 import scala.collection.mutable
 import scala.concurrent.Await
@@ -82,10 +80,6 @@ private[spark] class CoarseGrainedExecutorBackend(
         val ser = env.closureSerializer.newInstance()
         val taskDesc = ser.deserialize[TaskDescription](data.value)
         logInfo("Got assigned task " + taskDesc.taskId)
-        //@@@@ （在反序列化后）增加Task启动时间和Executor ID
-        logInfo("@@@@ExecutorID: "+executorId+" to launch task "+taskDesc.name+",startTime: "+(new SimpleDateFormat("dd日HH时mm分ss秒SSS毫秒")).format(System.currentTimeMillis())
-                +" StartMilliTime: "+System.currentTimeMillis())
-        //END
         executor.launchTask(this, taskId = taskDesc.taskId, attemptNumber = taskDesc.attemptNumber,
           taskDesc.name, taskDesc.serializedTask)
       }

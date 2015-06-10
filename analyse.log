@@ -1,52 +1,46 @@
-15/06/03 16:32:18 INFO DAGScheduler: Final stage: Stage 3(collect at SparkPageRank.scala:71)
-15/06/03 16:32:18 INFO DAGScheduler: Parents of final stage: List(Stage 2)
-15/06/03 16:32:18 INFO DAGScheduler: Missing parents: List(Stage 2)
-15/06/03 16:32:18 INFO DAGScheduler: Submitting 1 missing tasks from Stage 0 (MapPartitionsRDD[3] at distinct at SparkPageRank.scala:60)
-15/06/03 16:32:22 INFO TaskSetManager: Finished task 0.0 in stage 0.0 (TID 0) in 2442 ms on spark3 (1/1)
-15/06/03 16:32:22 INFO DAGScheduler: Missing parents for Stage 1: List()
-15/06/03 16:32:22 INFO DAGScheduler: Missing parents for Stage 2: List(Stage 1)
-15/06/03 16:32:22 INFO DAGScheduler: Missing parents for Stage 3: List(Stage 2)
-15/06/03 16:32:22 INFO DAGScheduler: Submitting 1 missing tasks from Stage 1 (MapPartitionsRDD[5] at distinct at SparkPageRank.scala:60)
-15/06/03 16:32:22 INFO DAGScheduler: Missing parents for Stage 2: List()
-15/06/03 16:32:22 INFO DAGScheduler: Missing parents for Stage 3: List(Stage 2)
-15/06/03 16:32:22 INFO TaskSetManager: Finished task 0.0 in stage 1.0 (TID 1) in 145 ms on spark3 (1/1)
-15/06/03 16:32:22 INFO TaskSetManager: @@@@ShuffleRemoteRead: 0
-15/06/03 16:32:22 INFO TaskSetManager: @@@@ShuffleLocalRead: 64
-15/06/03 16:32:22 INFO TaskSetManager: @@@@ShuffleWrite: 66
-15/06/03 16:32:22 INFO TaskSetManager: @@@@ShuffleWriteRecords: 6
-15/06/03 16:32:22 INFO DAGScheduler: Submitting 1 missing tasks from Stage 2 (MapPartitionsRDD[12] at flatMap at SparkPageRank.scala:64)
-15/06/03 16:32:23 INFO TaskSetManager: Finished task 0.0 in stage 2.0 (TID 2) in 193 ms on spark3 (1/1)
-15/06/03 16:32:23 INFO TaskSetManager: @@@@ShuffleRemoteRead: 0
-15/06/03 16:32:23 INFO TaskSetManager: @@@@ShuffleLocalRead: 66
-15/06/03 16:32:23 INFO TaskSetManager: @@@@ShuffleWrite: 62
-15/06/03 16:32:23 INFO TaskSetManager: @@@@ShuffleWriteRecords: 4
-15/06/03 16:32:23 INFO DAGScheduler: Missing parents for Stage 3: List()
-15/06/03 16:32:23 INFO DAGScheduler: Submitting 1 missing tasks from Stage 3 (MapPartitionsRDD[14] at mapValues at SparkPageRank.scala:68)
-15/06/03 16:32:23 INFO TaskSetManager: Finished task 0.0 in stage 3.0 (TID 3) in 156 ms on spark3 (1/1)
-15/06/03 16:32:23 INFO TaskSetManager: @@@@ShuffleRemoteRead: 0
-15/06/03 16:32:23 INFO TaskSetManager: @@@@ShuffleLocalRead: 62
-  [INFO ] [2015-06-03 16:34:24] Submitting 1 missing tasks from Stage 0 (MapPartitionsRDD[3] at distinct at SparkPageRank.scala:60)
-  [INFO ] [2015-06-03 16:34:26] @@@@ExecutorID: 1 to launch task,time: 03日16时34分26秒500毫秒
-  [INFO ] [2015-06-03 16:34:26] @@@@StartMilliTime: 1433320466501
-  [INFO ] [2015-06-03 16:34:26] Got assigned task 0
-  [INFO ] [2015-06-03 16:34:26] Running task 0.0 in stage 0.0 (TID 0)
-  [INFO ] [2015-06-03 16:34:30] Finished task 0.0 in stage 1.0 (TID 1). 1014 bytes result sent to driver
-  [INFO ] [2015-06-03 16:34:30] Finished task 0.0 in stage 1.0 (TID 1) in 1917 ms on spark4 (1/1)
-  [INFO ] [2015-06-03 16:34:30] @@@@ShuffleRemoteRead: 64
-  [INFO ] [2015-06-03 16:34:30] @@@@ShuffleLocalRead: 0
-  [INFO ] [2015-06-03 16:34:30] @@@@ShuffleWrite: 66
-  [INFO ] [2015-06-03 16:34:30] @@@@ShuffleWriteRecords: 6
-  [INFO ] [2015-06-03 16:34:30] Missing parents for Stage 2: List()
-  [INFO ] [2015-06-03 16:34:30] Missing parents for Stage 3: List(Stage 2)
-  [INFO ] [2015-06-03 16:34:30] Submitting 1 missing tasks from Stage 2 (MapPartitionsRDD[12] at flatMap at SparkPageRank.scala:64)
-  [INFO ] [2015-06-03 16:34:30] @@@@ExecutorID: 1 to launch task,time: 03日16时34分30秒778毫秒
-  [INFO ] [2015-06-03 16:34:30] @@@@StartMilliTime: 1433320470778
-  [INFO ] [2015-06-03 16:34:30] Got assigned task 2
-  [INFO ] [2015-06-03 16:34:30] Running task 0.0 in stage 2.0 (TID 2)
-  [INFO ] [2015-06-03 16:34:31] Finished task 0.0 in stage 2.0 (TID 2). 2705 bytes result sent to driver
-  [INFO ] [2015-06-03 16:34:31] Submitting 1 missing tasks from Stage 3 (MapPartitionsRDD[14] at mapValues at SparkPageRank.scala:68)
-  [INFO ] [2015-06-03 16:34:31] @@@@ExecutorID: 2 to launch task,time: 03日16时34分31秒471毫秒
-  [INFO ] [2015-06-03 16:34:31] @@@@StartMilliTime: 1433320471473
-  [INFO ] [2015-06-03 16:34:31] Got assigned task 3
-  [INFO ] [2015-06-03 16:34:31] Running task 0.0 in stage 3.0 (TID 3)
-  [INFO ] [2015-06-03 16:34:33] Finished task 0.0 in stage 3.0 (TID 3). 918 bytes result sent to driver
+  2015-06-09 16:34:01] Running task 0.0 in stage 0.0 (TID 0)
+  [INFO ] [2015-06-09 16:34:04] Finished task 0.0 in stage 0.0 (TID 0). 1920 bytes result sent to driver
+  [INFO ] [2015-06-09 16:34:04] Missing parents for Stage 1: List()
+  [INFO ] [2015-06-09 16:34:04] Missing parents for Stage 2: List(Stage 1)
+  [INFO ] [2015-06-09 16:34:04] Missing parents for Stage 3: List(Stage 2)
+  [INFO ] [2015-06-09 16:34:04] Submitting 1 missing tasks from Stage 1 (MapPartitionsRDD[5] at distinct at SparkPageRank.scala:60)
+  [INFO ] [2015-06-09 16:34:04] @@@@ExecutorID: 3 to launch task,time: 09日16时34分04秒233毫秒
+  [INFO ] [2015-06-09 16:34:04] @@@@StartMilliTime: 1433838844331
+  [INFO ] [2015-06-09 16:34:04] Got assigned task 1
+  [INFO ] [2015-06-09 16:34:04] Running task 0.0 in stage 1.0 (TID 1)
+  [INFO ] [2015-06-09 16:34:06] Finished task 0.0 in stage 1.0 (TID 1). 1014 bytes result sent to driver
+  [INFO ] [2015-06-09 16:34:06] Submitting 1 missing tasks from Stage 2 (MapPartitionsRDD[12] at flatMap at SparkPageRank.scala:64)
+  [INFO ] [2015-06-09 16:34:06] @@@@ExecutorID: 2 to launch task,time: 09日16时34分06秒874毫秒
+  [INFO ] [2015-06-09 16:34:06] @@@@StartMilliTime: 1433838846875
+  [INFO ] [2015-06-09 16:34:06] Got assigned task 2
+  [INFO ] [2015-06-09 16:34:06] Running task 0.0 in stage 2.0 (TID 2)
+  [INFO ] [2015-06-09 16:34:07] Finished task 0.0 in stage 2.0 (TID 2). 2705 bytes result sent to driver
+  [INFO ] [2015-06-09 16:34:07] Submitting 1 missing tasks from Stage 3 (MapPartitionsRDD[14] at mapValues at SparkPageRank.scala:68)
+  [INFO ] [2015-06-09 16:34:07] @@@@ExecutorID: 1 to launch task,time: 09日16时34分07秒605毫秒
+  [INFO ] [2015-06-09 16:34:07] @@@@StartMilliTime: 1433838847640
+  [INFO ] [2015-06-09 16:34:07] Got assigned task 3
+  [INFO ] [2015-06-09 16:34:07] Running task 0.0 in stage 3.0 (TID 3)
+  [INFO ] [2015-06-09 16:34:27] Finished task 0.0 in stage 2.1 (TID 4). 2705 bytes result sent to driver
+  [INFO ] [2015-06-09 16:34:27] @@@@ExecutorID: 2 to launch task,time: 09日16时34分27秒883毫秒
+  [INFO ] [2015-06-09 16:34:27] @@@@StartMilliTime: 1433838867884
+  [INFO ] [2015-06-09 16:34:27] Got assigned task 5
+  [INFO ] [2015-06-09 16:34:27] Running task 0.0 in stage 3.1 (TID 5)
+  [INFO ] [2015-06-09 16:34:28] Finished task 0.0 in stage 3.1 (TID 5). 918 bytes result sent to driver
+  [INFO ] [2015-06-09 16:36:12] @@@@ExecutorID: 2 to launch task,time: 09日16时36分12秒763毫秒
+  [INFO ] [2015-06-09 16:36:12] @@@@StartMilliTime: 1433838972765
+  [INFO ] [2015-06-09 16:36:14] @@@@ExecutorID: 1 to launch task,time: 09日16时36分14秒480毫秒
+  [INFO ] [2015-06-09 16:36:14] @@@@StartMilliTime: 1433838974482
+  [INFO ] [2015-06-09 16:36:14] Got assigned task 1
+  [INFO ] [2015-06-09 16:36:14] Running task 0.0 in stage 1.0 (TID 1)
+  [INFO ] [2015-06-09 16:36:14] Finished task 0.0 in stage 0.0 (TID 0). 1920 bytes result sent to driver
+  [INFO ] [2015-06-09 16:36:14] Missing parents for Stage 2: List(Stage 1)
+  [INFO ] [2015-06-09 16:36:14] Missing parents for Stage 3: List(Stage 2)
+  [INFO ] [2015-06-09 16:36:14] Submitting 1 missing tasks from Stage 1 (MapPartitionsRDD[5] at distinct at SparkPageRank.scala:60)
+  [INFO ] [2015-06-09 16:36:33] Finished task 0.0 in stage 0.1 (TID 2). 1920 bytes result sent to driver
+  [INFO ] [2015-06-09 16:36:35] Finished task 0.0 in stage 2.0 (TID 4). 2705 bytes result sent to driver
+  [INFO ] [2015-06-09 16:36:35] Submitting 1 missing tasks from Stage 3 (MapPartitionsRDD[14] at mapValues at SparkPageRank.scala:68)
+  [INFO ] [2015-06-09 16:36:35] @@@@ExecutorID: 3 to launch task,time: 09日16时36分35秒650毫秒
+  [INFO ] [2015-06-09 16:36:35] @@@@StartMilliTime: 1433838995651
+  [INFO ] [2015-06-09 16:36:35] Got assigned task 5
+  [INFO ] [2015-06-09 16:36:35] Running task 0.0 in stage 3.0 (TID 5)
+  [INFO ] [2015-06-09 16:36:36] Finished task 0.0 in stage 3.0 (TID 5). 918 bytes result sent to driver
