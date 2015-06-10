@@ -32,7 +32,6 @@
       <plugin path="E:\我的文档\Desktop\spark-1.3.1\lib_managed\jars\genjavadoc-plugin_2.10.4-0.8.jar" />
       <plugin path="E:\我的文档\Desktop\spark-1.3.1\lib_managed\jars\paradise_2.10.4-2.0.1.jar" />
     </plugins>
-    <option name="incrementalityType" value="SBT" />
     <profile name="Maven 1" modules="streaming-flume,streaming-kafka,core,repl,network-common,network-shuffle,streaming-flume-sink,streaming,bagel,streaming-kafka-assembly,sql,streaming-mqtt,streaming-zeromq,streaming-twitter,spark">
       <option name="deprecationWarnings" value="true" />
       <option name="uncheckedWarnings" value="true" />
