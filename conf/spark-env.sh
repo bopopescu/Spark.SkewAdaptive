@@ -2,9 +2,10 @@
 
 # This file is sourced when running various Spark programs.
 # Copy it as spark-env.sh and edit that to configure Spark for your site.
-
+export JAVA_HOME=/usr
 # Options read when launching programs locally with 
 # ./bin/run-example or ./bin/spark-submit
+export HADOOP_CONF_DIR=/home/spark/hadoop-1.2.1/conf
 # - HADOOP_CONF_DIR, to point Spark towards Hadoop configuration files
 # - SPARK_LOCAL_IP, to set the IP address Spark binds to on this node
 # - SPARK_PUBLIC_DNS, to set the public dns name of the driver program
