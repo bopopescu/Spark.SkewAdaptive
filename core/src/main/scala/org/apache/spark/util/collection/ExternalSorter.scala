@@ -746,7 +746,7 @@ private[spark] class ExternalSorter[K, V, C](
           _.incShuffleWriteTime(System.nanoTime - writeStartTime))
       }
     } else if (spills.isEmpty && partitionWriters == null) {
-      // Case where we only have in-memory data
+      // Case where we only have in-memory d0ata
       val collection = if (aggregator.isDefined) map else buffer
       val it = collection.destructiveSortedWritablePartitionedIterator(comparator)
       while (it.hasNext) {

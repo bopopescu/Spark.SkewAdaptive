@@ -278,6 +278,7 @@ object AccumulatorParam {
 
 // TODO: The multi-thread support in accumulators is kind of lame; check
 // if there's a more intuitive way of doing it right
+//2015.7.13 Accumulators and Broadcast are shared variables among Spark
 private[spark] object Accumulators extends Logging {
   /**
    * This global map holds the original accumulator objects that are created on the driver.

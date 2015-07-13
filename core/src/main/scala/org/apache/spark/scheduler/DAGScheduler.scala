@@ -1038,8 +1038,12 @@ class DAGScheduler(
             if (failedEpoch.contains(execId) && smt.epoch <= failedEpoch(execId)) {
               logInfo("Ignoring possibly bogus ShuffleMapTask completion from " + execId)
             } else {
+              //7.13 outputLoc存的是Array[List[MapStatus]](NumsOfPartitions)
+              //      ！！即通过partitionId作为下标可以获得下一个stage某个reducer所需要的MapStatus列表
               shuffleStage.addOutputLoc(smt.partitionId, status)
             }
+            //7.13 如果该该task是该stage的最后一个task，则把output注册到mapOutputTracker，
+            //      否则submitMissingTasks
             if (runningStages.contains(shuffleStage) && shuffleStage.pendingTasks.isEmpty) {
               markStageAsFinished(shuffleStage)
               logInfo("looking for newly runnable stages")

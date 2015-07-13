@@ -66,12 +66,14 @@ private[spark] class TaskResultGetter(sparkEnv: SparkEnv, scheduler: TaskSchedul
                 return
               }
               logDebug("Fetching indirect task result for TID %s".format(tid))
+              //7.13 taskSchedulerImpl和TaskSetManager处理一下，DAGScheduler处理，并把事件post到总线
               scheduler.handleTaskGettingResult(taskSetManager, tid)
+              //7.13 Driver从远程获得taskResult，要么是ResultTask的结果T，要么是ShuffleTask的MapStatus
               val serializedTaskResult = sparkEnv.blockManager.getRemoteBytes(blockId)
               if (!serializedTaskResult.isDefined) {
                 /* We won't be able to get the task result if the machine that ran the task failed
                  * between when the task ended and when we tried to fetch the result, or if the
-                 * block manager had to flush the result. */
+                 * block manager had to flush the result. */ //7.13 确实有可能TaskRunner失败了
                 scheduler.handleFailedTask(
                   taskSetManager, tid, TaskState.FINISHED, TaskResultLost)
                 return

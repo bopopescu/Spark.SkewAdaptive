@@ -18,20 +18,18 @@
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/hive-build.iml" filepath="$PROJECT_DIR$/.idea/modules/hive-build.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/mllib.iml" filepath="$PROJECT_DIR$/.idea/modules/mllib.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/mllib-build.iml" filepath="$PROJECT_DIR$/.idea/modules/mllib-build.iml" />
-      <module fileurl="file://$PROJECT_DIR$/external/mqtt/.idea/modules/mqtt.iml" filepath="$PROJECT_DIR$/external/mqtt/.idea/modules/mqtt.iml" />
-      <module fileurl="file://$PROJECT_DIR$/external/mqtt/.idea/modules/mqtt-build.iml" filepath="$PROJECT_DIR$/external/mqtt/.idea/modules/mqtt-build.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/network-common.iml" filepath="$PROJECT_DIR$/.idea/modules/network-common.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/network-common-build.iml" filepath="$PROJECT_DIR$/.idea/modules/network-common-build.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/network-shuffle.iml" filepath="$PROJECT_DIR$/.idea/modules/network-shuffle.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/network-shuffle-build.iml" filepath="$PROJECT_DIR$/.idea/modules/network-shuffle-build.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/oldDeps.iml" filepath="$PROJECT_DIR$/.idea/modules/oldDeps.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/oldDeps-build.iml" filepath="$PROJECT_DIR$/.idea/modules/oldDeps-build.iml" />
-      <module fileurl="file://$PROJECT_DIR$/sql/catalyst/project/.idea/modules/project.iml" filepath="$PROJECT_DIR$/sql/catalyst/project/.idea/modules/project.iml" />
-      <module fileurl="file://$PROJECT_DIR$/sql/catalyst/project/.idea/modules/project-build.iml" filepath="$PROJECT_DIR$/sql/catalyst/project/.idea/modules/project-build.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/repl.iml" filepath="$PROJECT_DIR$/.idea/modules/repl.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/repl-build.iml" filepath="$PROJECT_DIR$/.idea/modules/repl-build.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/spark.iml" filepath="$PROJECT_DIR$/.idea/modules/spark.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/spark-build.iml" filepath="$PROJECT_DIR$/.idea/modules/spark-build.iml" />
+      <module fileurl="file://$PROJECT_DIR$/launcher/spark-launcher_2.10.iml" filepath="$PROJECT_DIR$/launcher/spark-launcher_2.10.iml" />
+      <module fileurl="file://$PROJECT_DIR$/unsafe/spark-unsafe_2.10.iml" filepath="$PROJECT_DIR$/unsafe/spark-unsafe_2.10.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/sql.iml" filepath="$PROJECT_DIR$/.idea/modules/sql.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/sql-build.iml" filepath="$PROJECT_DIR$/.idea/modules/sql-build.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/streaming.iml" filepath="$PROJECT_DIR$/.idea/modules/streaming.iml" />

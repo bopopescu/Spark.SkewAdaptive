@@ -157,6 +157,20 @@
         <processorPath useClasspath="true" />
         <module name="streaming" />
       </profile>
+      <profile default="false" name="Annotation profile for spark-unsafe_2.10" enabled="true">
+        <sourceOutputDir name="target\generated-sources\annotations" />
+        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="true" />
+        <module name="spark-unsafe_2.10" />
+      </profile>
+      <profile default="false" name="Annotation profile for spark-launcher_2.10" enabled="true">
+        <sourceOutputDir name="target\generated-sources\annotations" />
+        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="true" />
+        <module name="spark-launcher_2.10" />
+      </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
       <module name="assembly" target="1.5" />
@@ -171,6 +185,8 @@
       <module name="network-shuffle" target="1.6" />
       <module name="repl" target="1.6" />
       <module name="spark" target="1.5" />
+      <module name="spark-launcher_2.10" target="1.6" />
+      <module name="spark-unsafe_2.10" target="1.6" />
       <module name="sql" target="1.6" />
       <module name="streaming" target="1.6" />
       <module name="streaming-flume" target="1.6" />

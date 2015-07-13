@@ -32,7 +32,7 @@
       <plugin path="E:\我的文档\Desktop\spark-1.3.1\lib_managed\jars\genjavadoc-plugin_2.10.4-0.8.jar" />
       <plugin path="E:\我的文档\Desktop\spark-1.3.1\lib_managed\jars\paradise_2.10.4-2.0.1.jar" />
     </plugins>
-    <profile name="Maven 1" modules="streaming-flume,streaming-kafka,core,repl,network-common,network-shuffle,streaming-flume-sink,streaming,bagel,streaming-kafka-assembly,sql,streaming-mqtt,streaming-zeromq,streaming-twitter,spark">
+    <profile name="Maven 1" modules="mllib,network-shuffle,streaming-twitter,assembly,streaming-flume-sink,streaming-mqtt,streaming-kafka-assembly,examples,spark-launcher_2.10,streaming,core,network-common,streaming-zeromq,spark-unsafe_2.10,spark,tools,streaming-kafka,repl,hive,bagel,catalyst,streaming-flume,sql,graphx">
       <option name="deprecationWarnings" value="true" />
       <option name="uncheckedWarnings" value="true" />
       <option name="featureWarnings" value="true" />
@@ -40,6 +40,6 @@
         <plugin path="C:\Users\Feiyu\.m2\repository\org\scalamacros\paradise_2.10.4\2.0.1\paradise_2.10.4-2.0.1.jar" />
       </plugins>
     </profile>
-    <profile name="SBT 2" modules="hive,graphx,tools,mqtt,mllib,examples,assembly,catalyst,project" />
+    <profile name="SBT 2" modules="mqtt,project" />
   </component>
 </project>
