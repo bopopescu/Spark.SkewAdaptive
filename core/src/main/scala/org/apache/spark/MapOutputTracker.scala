@@ -127,8 +127,11 @@ private[spark] abstract class MapOutputTracker(conf: SparkConf) extends Logging 
    * Called from executors to get the server URIs and output sizes of the map outputs of
    * a given shuffle.
    */
+  //8.2 MapOutputTracker在Driver和Executor都有一份。
+  // getServerStatuses由Executor上的BlockStoreShuffleFetcher.fetch()直接调用，先查本地，再查远程
   def getServerStatuses(shuffleId: Int, reduceId: Int): Array[(BlockManagerId, Long)] = {
     val statuses = mapStatuses.get(shuffleId).orNull
+    //8.2 MapOutPutTracker中查不到相关信息，如果其他Task正在fetch这个信息，就等待
     if (statuses == null) {
       logInfo("Don't have map outputs for shuffle " + shuffleId + ", fetching them")
       var fetchedStatuses: Array[MapStatus] = null
@@ -145,12 +148,14 @@ private[spark] abstract class MapOutputTracker(conf: SparkConf) extends Logging 
         // Either while we waited the fetch happened successfully, or
         // someone fetched it in between the get and the fetching.synchronized.
         fetchedStatuses = mapStatuses.get(shuffleId).orNull
+        //8.2 等完了还是没有相关信息，自己去fetch
         if (fetchedStatuses == null) {
           // We have to do the fetch, get others to wait for us.
           fetching += shuffleId
         }
       }
 
+      //8.2 最后拿不到相关信息，只能从远程端点fetch信息
       if (fetchedStatuses == null) {
         // We won the race to fetch the output locs; do so
         logInfo("Doing the fetch; tracker endpoint = " + trackerEndpoint)
@@ -222,6 +227,7 @@ private[spark] class MapOutputTrackerMaster(conf: SparkConf)
   extends MapOutputTracker(conf) {
 
   /** Cache a serialized version of the output statuses for each shuffle to send them out faster */
+  //8.2 ??????
   private var cacheEpoch = epoch
 
   /**

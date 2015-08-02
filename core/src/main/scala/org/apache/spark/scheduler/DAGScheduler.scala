@@ -832,6 +832,7 @@ class DAGScheduler(
     stage.pendingTasks.clear()
 
 
+    //8.2 得到stage.outputLocs中为空的Partition
     // First figure out the indexes of partition ids to compute.
     val partitionsToCompute: Seq[Int] = {
       stage match {
@@ -887,6 +888,7 @@ class DAGScheduler(
     }
 
     val tasks: Seq[Task[_]] = stage match {
+      //8.2 根据partitionsToCompute（中间结果为空的Partition）得到另外需要执行的Task序列
       case stage: ShuffleMapStage =>
         partitionsToCompute.map { id =>
           val locs = getPreferredLocs(stage.rdd, id)
@@ -908,6 +910,12 @@ class DAGScheduler(
       logInfo("Submitting " + tasks.size + " missing tasks from " + stage + " (" + stage.rdd + ")")
       stage.pendingTasks ++= tasks
       logDebug("New pending tasks: " + stage.pendingTasks)
+      //8.2 以TaskSet为单位向TaskScheduleImpl提交，TaskSet中包含的Task数量可以不定的!!
+      // 所以只提交缺失中间结果的Task（每个Partition对应一个Task）
+      // 问：那么原来该Stage的TaskSet中的Task不是会和该TaskSet中的重复么？？？？
+      // 答：原先的TaskSet收到TaskCompletion事件后自然就关闭了，所以不会重复的
+      // 调用submitMissingTasks/submitStage的场景：1.handleTaskCompletion中：stage中最后一个task完成而且中间结果合法
+      //                                           2.handleTaskCompletion中：stage中最后一个task完成而且中间结果非法
       taskScheduler.submitTasks(
         new TaskSet(tasks.toArray, stage.id, stage.newAttemptId(), stage.jobId, properties))
       stage.latestInfo.submissionTime = Some(clock.getTimeMillis())
@@ -1038,8 +1046,10 @@ class DAGScheduler(
             if (failedEpoch.contains(execId) && smt.epoch <= failedEpoch(execId)) {
               logInfo("Ignoring possibly bogus ShuffleMapTask completion from " + execId)
             } else {
+              //8.2 完成一个Task就把得到的MapStatus保存到相应的stage中的OutputLoc里
               //7.13 outputLoc存的是Array[List[MapStatus]](NumsOfPartitions)
               //      ！！即通过partitionId作为下标可以获得下一个stage某个reducer所需要的MapStatus列表
+              //            partitionId从0递增在开始设计上有这样的含义
               shuffleStage.addOutputLoc(smt.partitionId, status)
             }
             //7.13 如果该该task是该stage的最后一个task，则把output注册到mapOutputTracker，
@@ -1063,6 +1073,8 @@ class DAGScheduler(
                 changeEpoch = true)
 
               clearCacheLocs()
+              //8.2 如果outputLocs中有空，则说明该最后一个Task输出的中间结果非法
+              // 需要重新submitStage，间接submitMissingTasks，生成TaskSet交给TaskSchedulerImpl调度
               if (shuffleStage.outputLocs.contains(Nil)) {
                 // Some tasks had failed; let's resubmit this shuffleStage
                 // TODO: Lower-level scheduler should also deal with this
@@ -1070,8 +1082,11 @@ class DAGScheduler(
                   ") because some of its tasks had failed: " +
                   shuffleStage.outputLocs.zipWithIndex.filter(_._1.isEmpty)
                       .map(_._2).mkString(", "))
+                //8.2 ????为什么不直接用submitMissingTasks(shuffleStage, jobId)
                 submitStage(shuffleStage)
               } else {
+                //8.2 该最后一个Task输出的中间结果合法（该TaskSet已完成），
+                // 从waitingStages选出所有没有父依赖的可运行的stage加入runningStages中，直接submitMissingTasks
                 val newlyRunnable = new ArrayBuffer[Stage]
                 for (shuffleStage <- waitingStages) {
                   logInfo("Missing parents for " + shuffleStage + ": " +

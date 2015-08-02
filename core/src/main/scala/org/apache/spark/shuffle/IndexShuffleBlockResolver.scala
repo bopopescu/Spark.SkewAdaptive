@@ -69,6 +69,26 @@ private[spark] class IndexShuffleBlockResolver(conf: SparkConf) extends ShuffleB
     }
   }
 
+  override def getBlockData(blockId: ShuffleBlockId): ManagedBuffer = {
+    // The block is actually going to be a range of a single map output file for this map, so
+    // find out the consolidated file, then the offset within that from our index
+    val indexFile = getIndexFile(blockId.shuffleId, blockId.mapId)
+
+    val in = new DataInputStream(new FileInputStream(indexFile))
+    try {
+      ByteStreams.skipFully(in, blockId.reduceId * 8)
+      val offset = in.readLong()
+      val nextOffset = in.readLong()
+      new FileSegmentManagedBuffer(
+        transportConf,
+        getDataFile(blockId.shuffleId, blockId.mapId),
+        offset,
+        nextOffset - offset)
+    } finally {
+      in.close()
+    }
+  }
+
   /**
    * Write an index file with the offsets of each block, plus a final offset at the end for the
    * end of the output file. This will be used by getBlockLocation to figure out where each block
@@ -87,26 +107,6 @@ private[spark] class IndexShuffleBlockResolver(conf: SparkConf) extends ShuffleB
       }
     } {
       out.close()
-    }
-  }
-
-  override def getBlockData(blockId: ShuffleBlockId): ManagedBuffer = {
-    // The block is actually going to be a range of a single map output file for this map, so
-    // find out the consolidated file, then the offset within that from our index
-    val indexFile = getIndexFile(blockId.shuffleId, blockId.mapId)
-
-    val in = new DataInputStream(new FileInputStream(indexFile))
-    try {
-      ByteStreams.skipFully(in, blockId.reduceId * 8)
-      val offset = in.readLong()
-      val nextOffset = in.readLong()
-      new FileSegmentManagedBuffer(
-        transportConf,
-        getDataFile(blockId.shuffleId, blockId.mapId),
-        offset,
-        nextOffset - offset)
-    } finally {
-      in.close()
     }
   }
 
