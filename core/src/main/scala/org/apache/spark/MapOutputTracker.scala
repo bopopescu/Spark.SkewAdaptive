@@ -183,8 +183,8 @@ private[spark] abstract class MapOutputTracker(conf: SparkConf) extends Logging 
       }
     } else {
       statuses.synchronized {
-        return MapOutputTracker.convertMapStatuses(shuffleId, reduceId, statuses)
       }
+      return MapOutputTracker.convertMapStatuses(shuffleId, reduceId, statuses)
     }
   }
 

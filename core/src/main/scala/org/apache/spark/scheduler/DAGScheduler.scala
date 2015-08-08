@@ -803,6 +803,7 @@ class DAGScheduler(
   }
 
   /** Submits stage, but first recursively submits any missing parents. */
+  //8.6 要求waitingStages(stage)、runningStages(stage)、failedStages(stage)都为空
   private def submitStage(stage: Stage) {
     val jobId = activeJobForStage(stage)
     if (jobId.isDefined) {
@@ -921,8 +922,8 @@ class DAGScheduler(
       stage.latestInfo.submissionTime = Some(clock.getTimeMillis())
     } else {
       // Because we posted SparkListenerStageSubmitted earlier, we should mark
-      // the stage as completed here in case there are no tasks to run
       markStageAsFinished(stage, None)
+      // the stage as completed here in case there are no tasks to run
 
       val debugString = stage match {
         case stage: ShuffleMapStage =>
@@ -977,8 +978,8 @@ class DAGScheduler(
    * Responds to a task finishing. This is called inside the event loop so it assumes that it can
    * modify the scheduler's internal state. Use taskEnded() to post a task end event from outside.
    */
-  private[scheduler] def handleTaskCompletion(event: CompletionEvent) {
     val task = event.task
+  private[scheduler] def handleTaskCompletion(event: CompletionEvent) {
     val stageId = task.stageId
     val taskType = Utils.getFormattedClassName(task)
 
@@ -1046,14 +1047,13 @@ class DAGScheduler(
             if (failedEpoch.contains(execId) && smt.epoch <= failedEpoch(execId)) {
               logInfo("Ignoring possibly bogus ShuffleMapTask completion from " + execId)
             } else {
-              //8.2 完成一个Task就把得到的MapStatus保存到相应的stage中的OutputLoc里
+              //8.2 完成一个Task就把得到的MapStatus保存到相应的stage中相应的partitionId的OutputLoc里
               //7.13 outputLoc存的是Array[List[MapStatus]](NumsOfPartitions)
               //      ！！即通过partitionId作为下标可以获得下一个stage某个reducer所需要的MapStatus列表
               //            partitionId从0递增在开始设计上有这样的含义
               shuffleStage.addOutputLoc(smt.partitionId, status)
             }
             //7.13 如果该该task是该stage的最后一个task，则把output注册到mapOutputTracker，
-            //      否则submitMissingTasks
             if (runningStages.contains(shuffleStage) && shuffleStage.pendingTasks.isEmpty) {
               markStageAsFinished(shuffleStage)
               logInfo("looking for newly runnable stages")
@@ -1083,6 +1083,8 @@ class DAGScheduler(
                   shuffleStage.outputLocs.zipWithIndex.filter(_._1.isEmpty)
                       .map(_._2).mkString(", "))
                 //8.2 ????为什么不直接用submitMissingTasks(shuffleStage, jobId)
+                //8.6 submitStage函数中必须满足waitingStages、runningStages(stage)、failedStages(stage)都为空！
+                // 之前的markStageAsFinished(shuffleStage)已经把shuffleStage从waitingStages中删去了
                 submitStage(shuffleStage)
               } else {
                 //8.2 该最后一个Task输出的中间结果合法（该TaskSet已完成），
@@ -1104,6 +1106,7 @@ class DAGScheduler(
                 } {
                   logInfo("Submitting " + shuffleStage + " (" +
                     shuffleStage.rdd + "), which is now runnable")
+                  //8.6 ???? 前面runningStages ++= newlyRunnable，后面submitMissingTasks中又在runningStages重复加了 ?
                   submitMissingTasks(shuffleStage, jobId)
                 }
               }
@@ -1165,6 +1168,13 @@ class DAGScheduler(
         // Unrecognized failure - also do nothing. If the task fails repeatedly, the TaskScheduler
         // will abort the job.
     }
+    //8.6 ???? Success -> ShuffleMapTask 时已经submitStage/submitMissingTasks，这不会重复提交吗?
+    // 若output合法，submitMissingTasks前会从waitingStages中删去可运行的stages(没有父依赖的stage)，加入到runningStages
+    // 那么waitingStages中剩下的不可运行部分就会在这儿被提交。
+    // 因为submitWaitingStages()调用的是submitStage()，
+    // submitStage(stage)要stage不在waitingStages和runningStages和failedStage中才会跑进去，所以不会和之前提交的重复。
+    // 那么这句的意义是?
+    // 摘自网上：作用在于检查等待或失败的stages，重新submitStage提交
     submitWaitingStages()
   }
 

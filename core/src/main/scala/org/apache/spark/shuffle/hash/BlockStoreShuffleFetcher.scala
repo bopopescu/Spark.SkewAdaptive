@@ -28,6 +28,15 @@ import org.apache.spark.storage.{BlockId, BlockManagerId, ShuffleBlockFetcherIte
 import org.apache.spark.util.CompletionIterator
 
 private[hash] object BlockStoreShuffleFetcher extends Logging {
+  //8.5 一个ShuffleBlockFetcherIterator会拉取一个Partition的所有Block！
+  // 查询Executor的MapOutputTracker，由shuffleId和reduceId获得Array[MapStatus]再到Iterator的处理过程
+  // 1.statuses：mapOutputTracker.getServerStatuses(shuffleId, reduceId)得到Array[(BlockManagerId, blockSize)]
+  // 2.splitsByAddress：再处理为HashMap[BlockManagerId, ArrayBuffer[(array_index, blockSize)]]
+  // 3.blocksByAddress：再处理为Seq[(BlockManagerId, Seq[(BlockId, blockSize)])]
+  // 4.blockFetcherItr：再包装为ShuffleBlockFetcherIterator(shuffleClient, blockManager, blocksByAddress)：Iterator[(BlockId, Try[Iterator[A=(key,value)]])]
+  // 5.itr：通过unpackBlock选出blockFetcherItr中的Success，将其结果包装成Iterator[A=(key,value)]
+  // 6.completionIter：再包装为CompletionIterator[T=(key,value)]
+  // 7.返回：InterruptibleIterator[T=(key,value)]
   def fetch[T](
       shuffleId: Int,
       reduceId: Int,

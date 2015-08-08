@@ -58,6 +58,8 @@ private[spark] class SortShuffleWriter[K, V, C](
       // In this case we pass neither an aggregator nor an ordering to the sorter, because we don't
       // care whether the keys get sorted in each partition; that will be done on the reduce side
       // if the operation being run is sortByKey.
+      //8.4 默认分支，一般不再Map端做Combine
+      // ExternalSorter构造默认传入参数 (aggregator, partitioner, ordering, serializer)
       sorter = new ExternalSorter[K, V, V](None, Some(dep.partitioner), None, dep.serializer)
       sorter.insertAll(records)
     }

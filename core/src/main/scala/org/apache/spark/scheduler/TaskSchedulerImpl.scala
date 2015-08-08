@@ -303,6 +303,7 @@ private[spark] class TaskSchedulerImpl(
     return tasks
   }
 
+  //8.5 收到Finished的Task
   def statusUpdate(tid: Long, state: TaskState, serializedData: ByteBuffer) {
     var failedExecutor: Option[String] = None
     synchronized {

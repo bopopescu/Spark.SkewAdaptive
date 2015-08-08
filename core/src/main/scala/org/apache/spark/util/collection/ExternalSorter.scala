@@ -202,6 +202,7 @@ private[spark] class ExternalSorter[K, V, C](
         map.changeValue((getPartition(kv._1), kv._1), update)
         maybeSpillCollection(usingMap = true)
       }
+      //8.4 SortShuffle中bypassMergeSort一般为true，就是在没有aggregator的情况下，直接写磁盘
     } else if (bypassMergeSort) {
       // SPARK-4479: Also bypass buffering if merge sort is bypassed to avoid defensive copies
       if (records.hasNext) {
@@ -347,6 +348,9 @@ private[spark] class ExternalSorter[K, V, C](
     spillToPartitionFiles(collection.writablePartitionedIterator())
   }
 
+  //8.4 先创建partitionWriters，一个partitionWriter对应一个临时文件
+  // 然后逐个根据当前iterator指针的partitionId选择相应的Writer写入数据。
+  // iterator 类型为 ((getPartition(key), key), value)
   private def spillToPartitionFiles(iterator: WritablePartitionedIterator): Unit = {
     assert(bypassMergeSort)
 
@@ -723,7 +727,13 @@ private[spark] class ExternalSorter[K, V, C](
 
     // Track location of each range in the output file
     val lengths = new Array[Long](numPartitions)
-
+    //8.4 bypassMergeSort = (numPartitions <= bypassMergeThreshold && aggregator.isEmpty && ordering.isEmpty)
+    // SortShuffle下，后两项为true；bypassMergeThreshold默认为200，所以bypassMergeSort一般为true，
+    // partitionWriters不为空，因为之前insertAll()时spillToPartitionFiles()时已经创建了
+    // 所以这是SortShuffle默认分支
+    // 如果insertAll中是直接写文件的，那么因为map和buffer为空，所以spillToPartitionFiles()其实没有效果
+    // for循环中用copyStream把numPartitions个临时文件内容直接追加到outputFile后面（CopyStream默认就是从源文件末尾开始写）
+    // 输出各个临时文件的length
     if (bypassMergeSort && partitionWriters != null) {
       // We decided to write separate files for each partition, so just concatenate them. To keep
       // this simple we spill out the current in-memory collection so that everything is in files.
@@ -745,8 +755,10 @@ private[spark] class ExternalSorter[K, V, C](
         context.taskMetrics.shuffleWriteMetrics.foreach(
           _.incShuffleWriteTime(System.nanoTime - writeStartTime))
       }
+      //8.4 spills不为空，说明aggregator满了，向硬盘spill了。
+      // partitionWriters为空，说明还没有向硬盘写过文件
     } else if (spills.isEmpty && partitionWriters == null) {
-      // Case where we only have in-memory d0ata
+      // Case where we only have in-memory data
       val collection = if (aggregator.isDefined) map else buffer
       val it = collection.destructiveSortedWritablePartitionedIterator(comparator)
       while (it.hasNext) {
@@ -761,6 +773,8 @@ private[spark] class ExternalSorter[K, V, C](
         lengths(partitionId) = segment.length
       }
     } else {
+      // 8.4 (id, elements)为(partitionId, iteratorOfPartition)，将其全部输出到blockId这个文件中
+      // DiskBlockObjectWriter.fileSegment().length，即blockId文件从末尾开始，写入新的内容后，形成新的segment的长度
       // Not bypassing merge-sort; get an iterator by partition and just write everything directly.
       for ((id, elements) <- this.partitionedIterator) {
         if (elements.hasNext) {

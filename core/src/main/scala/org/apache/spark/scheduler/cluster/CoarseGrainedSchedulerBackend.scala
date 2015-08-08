@@ -88,6 +88,8 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     }
 
     override def receive: PartialFunction[Any, Unit] = {
+      //8.5 TaskSchedulerImpl.statusUpdate更新task状态
+      // ????makeOffers(executorId)中又有launchTasks，但statusUpdate(taskId, state, data.value)中也有makeOffers()
       case StatusUpdate(executorId, taskId, state, data) =>
         scheduler.statusUpdate(taskId, state, data.value)
         if (TaskState.isFinished(state)) {
@@ -246,7 +248,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     }
 
     // TODO (prashant) send conf instead of properties
-    driverEndpoint = rpcEnv.setupEndpoint(
+    driverEndpoint = .0rpcEnv.setupEndpoint(
       CoarseGrainedSchedulerBackend.ENDPOINT_NAME, new DriverEndpoint(rpcEnv, properties))
   }
 
@@ -274,6 +276,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     }
   }
 
+  //8.6 这个类是在master上的，而
   override def reviveOffers() {
     driverEndpoint.send(ReviveOffers)
   }
@@ -307,6 +310,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     if ((System.currentTimeMillis() - createTime) >= maxRegisteredWaitingTimeMs) {
       logInfo("SchedulerBackend is ready for scheduling beginning after waiting " +
         s"maxRegisteredResourcesWaitingTime: $maxRegisteredWaitingTimeMs(ms)")
+
       return true
     }
     false

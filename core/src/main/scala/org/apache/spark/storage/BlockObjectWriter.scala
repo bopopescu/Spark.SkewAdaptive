@@ -73,6 +73,7 @@ private[spark] abstract class BlockObjectWriter(val blockId: BlockId) extends Ou
 /**
  * BlockObjectWriter which writes directly to a file on disk. Appends to the given file.
  */
+//8.4 blockId有什么用????
 private[spark] class DiskBlockObjectWriter(
     blockId: BlockId,
     file: File,

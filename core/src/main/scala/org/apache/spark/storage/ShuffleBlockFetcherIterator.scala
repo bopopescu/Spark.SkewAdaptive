@@ -170,6 +170,7 @@ final class ShuffleBlockFetcherIterator(
     )
   }
 
+  //8.7 通过address.executorId == blockManager.blockManagerId.executorId判断是否是Local/Remote Block
   private[this] def splitLocalRemoteBlocks(): ArrayBuffer[FetchRequest] = {
     // Make remote requests at most maxBytesInFlight / 5 in length; the reason to keep them
     // smaller than maxBytesInFlight is to allow multiple, parallel fetches from up to 5
@@ -257,6 +258,7 @@ final class ShuffleBlockFetcherIterator(
     fetchRequests ++= Utils.randomize(remoteRequests)
 
     // Send out initial requests for blocks, up to our maxBytesInFlight
+    //8.7 在next()时也会执行这一段代码
     while (fetchRequests.nonEmpty &&
       (bytesInFlight == 0 || bytesInFlight + fetchRequests.front.size <= maxBytesInFlight)) {
       sendRequest(fetchRequests.dequeue())
@@ -266,12 +268,19 @@ final class ShuffleBlockFetcherIterator(
     logInfo("Started " + numFetches + " remote fetches in" + Utils.getUsedTimeMs(startTime))
 
     // Get Local Blocks
+    //8.7 直接向本机的BlockManager获得block
     fetchLocalBlocks()
     logDebug("Got local blocks in " + Utils.getUsedTimeMs(startTime))
   }
 
   override def hasNext: Boolean = numBlocksProcessed < numBlocksToFetch
 
+  //8.5 怎么会返回Try[Iterator[Any]]? 【知识点：Scala函数式的异常处理类Try,Success,Failure，及其map/flatMap】
+  // 因为case SuccessFetchResult ：
+  //        Try(buf.createInputStream()).map{ CompletionIterator[Any, Iterator[Any]] }
+  // 为什么是Iterator[Any]?
+  // 因为val iter = serializerInstance.deserializeStream(is).asKeyValueIterator
+  // 一个block文件中包含多个key-value对，用迭代器包装成Iterator[Any]，调用next()返回的某个block文件的iterator
   override def next(): (BlockId, Try[Iterator[Any]]) = {
     numBlocksProcessed += 1
     val startFetchWait = System.currentTimeMillis()
@@ -293,6 +302,9 @@ final class ShuffleBlockFetcherIterator(
     val iteratorTry: Try[Iterator[Any]] = result match {
       case FailureFetchResult(_, e) =>
         Failure(e)
+        //8.7 ???? size这个参数有什么用，只和maxBytesInFlight有关?
+        // 每个shuffleBlock都包含下一步待处理的所有partition的record，难道把所有内容都拉下来?
+        // 但是一个ShuffleMapTask只处理一个partition的record?
       case SuccessFetchResult(blockId, _, buf) =>
         // There is a chance that createInputStream can fail (e.g. fetching a local file that does
         // not exist, SPARK-4085). In that case, we should propagate the right exception so

@@ -104,6 +104,9 @@ private[spark] class OutputCommitCoordinator(conf: SparkConf, isDriver: Boolean)
   }
 
   // Called by DAGScheduler
+  //8.5 失败时会从authorizedCommittersByStage
+  // （类型：Map[StageId, mutable.Map[PartitionId, TaskAttemptId]]，保存了Stage中partitionId和TaskAttemptId的对应关系）
+  // 移除对应partitionId的TaskAttemptId
   private[scheduler] def taskCompleted(
       stage: StageId,
       partition: PartitionId,
