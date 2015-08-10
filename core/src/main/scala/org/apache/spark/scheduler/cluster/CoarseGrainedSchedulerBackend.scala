@@ -204,6 +204,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           }
         }
         else {
+          //8.11  executorDataMap(task.executorId)获得task对应的executor
           val executorData = executorDataMap(task.executorId)
           executorData.freeCores -= scheduler.CPUS_PER_TASK
           executorData.executorEndpoint.send(LaunchTask(new SerializableBuffer(serializedTask)))
