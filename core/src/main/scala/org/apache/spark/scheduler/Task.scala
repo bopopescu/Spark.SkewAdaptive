@@ -20,10 +20,12 @@ package org.apache.spark.scheduler
 import java.io.{ByteArrayOutputStream, DataInputStream, DataOutputStream}
 import java.nio.ByteBuffer
 
+import org.apache.spark.storage.{SkewTuneBackend, SkewTuneWorker}
+
 import scala.collection.mutable.HashMap
 
 import org.apache.spark.{TaskContextImpl, TaskContext}
-import org.apache.spark.executor.TaskMetrics
+import org.apache.spark.executor.{ExecutorBackend, TaskMetrics}
 import org.apache.spark.serializer.SerializerInstance
 import org.apache.spark.unsafe.memory.TaskMemoryManager
 import org.apache.spark.util.ByteBufferInputStream
@@ -52,14 +54,16 @@ private[spark] abstract class Task[T](val stageId: Int, var partitionId: Int) ex
    * @param attemptNumber how many times this task has been attempted (0 for the first attempt)
    * @return the result of the task
    */
-  final def run(taskAttemptId: Long, attemptNumber: Int): T = {
+  final def run(taskAttemptId: Long, attemptNumber: Int, executorId: String = null, skewTuneBackend: SkewTuneBackend = null): T = {
     context = new TaskContextImpl(
       stageId = stageId,
       partitionId = partitionId,
       taskAttemptId = taskAttemptId,
       attemptNumber = attemptNumber,
       taskMemoryManager = taskMemoryManager,
-      runningLocally = false)
+      runningLocally = false,
+      executorId = executorId, //sbt: error: parameter is already specified at parameter position 7 调用构造函数时一种是传入参数名=参数值，一种是直接传入参数值。注意方式的统一
+      skewTuneBackend = skewTuneBackend) //8.19 SkewTune NewAdd
     TaskContext.setTaskContext(context)
     context.taskMetrics.setHostname(Utils.localHostName())
     taskThread = Thread.currentThread()
@@ -90,7 +94,7 @@ private[spark] abstract class Task[T](val stageId: Int, var partitionId: Int) ex
   var metrics: Option[TaskMetrics] = None
 
   // Task context, to be initialized in run().
-  @transient protected var context: TaskContextImpl = _
+  @transient var context: TaskContextImpl = _ //8.24 SkewTune NewAdd : Del protected，make it public
 
   // The actual Thread on which the task is running, if any. Initialized in run().
   @volatile @transient private var taskThread: Thread = _

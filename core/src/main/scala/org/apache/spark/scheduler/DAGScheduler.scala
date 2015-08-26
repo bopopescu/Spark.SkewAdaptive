@@ -978,8 +978,8 @@ class DAGScheduler(
    * Responds to a task finishing. This is called inside the event loop so it assumes that it can
    * modify the scheduler's internal state. Use taskEnded() to post a task end event from outside.
    */
-    val task = event.task
   private[scheduler] def handleTaskCompletion(event: CompletionEvent) {
+    val task = event.task
     val stageId = task.stageId
     val taskType = Utils.getFormattedClassName(task)
 

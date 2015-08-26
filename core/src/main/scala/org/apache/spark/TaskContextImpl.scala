@@ -18,6 +18,7 @@
 package org.apache.spark
 
 import org.apache.spark.executor.TaskMetrics
+import org.apache.spark.storage.{SkewTuneWorker, SkewTuneBackend}
 import org.apache.spark.unsafe.memory.TaskMemoryManager
 import org.apache.spark.util.{TaskCompletionListener, TaskCompletionListenerException}
 
@@ -30,9 +31,13 @@ private[spark] class TaskContextImpl(
     override val attemptNumber: Int,
     override val taskMemoryManager: TaskMemoryManager,
     val runningLocally: Boolean = false,
+    val executorId: String = null, //8.19 SkewTune NewAdd
+    val skewTuneBackend: SkewTuneBackend = null,
     val taskMetrics: TaskMetrics = TaskMetrics.empty)
   extends TaskContext
   with Logging {
+
+  var skewTuneWorker: SkewTuneWorker = _ //8.19 SkewTune NewAdd
 
   // For backwards-compatibility; this method is now deprecated as of 1.3.0.
   override def attemptId(): Long = taskAttemptId

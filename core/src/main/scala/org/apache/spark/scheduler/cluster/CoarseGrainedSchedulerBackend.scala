@@ -20,13 +20,14 @@ package org.apache.spark.scheduler.cluster
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
-import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet}
-
 import org.apache.spark.rpc._
-import org.apache.spark.{ExecutorAllocationClient, Logging, SparkEnv, SparkException, TaskState}
 import org.apache.spark.scheduler._
 import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages._
-import org.apache.spark.util.{ThreadUtils, SerializableBuffer, AkkaUtils, Utils}
+import org.apache.spark.util.{AkkaUtils, SerializableBuffer, ThreadUtils, Utils}
+import org.apache.spark.{ExecutorAllocationClient, Logging, SparkEnv, SparkException, TaskState}
+
+import scala.collection.mutable
+import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet}
 
 /**
  * A scheduler backend that waits for coarse grained executors to connect to it through Akka.
@@ -65,6 +66,11 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
 
   // Executors we have requested the cluster manager to kill that have not died yet
   private val executorsPendingToRemove = new HashSet[String]
+
+  //8.24 SkewTune NewAdd : hasSkewTuneTaskRunByExecutorId 记录executor是否运行过task
+  /*val master = new SkewTuneMaster*/
+  //sbt：error:values cannot be volatile。因为volatile表示便以其不能确定岂会发生变化，与val矛盾
+  val hasSkewTuneTaskRunByExecutorId = new mutable.HashMap[String, Boolean]
 
   class DriverEndpoint(override val rpcEnv: RpcEnv, sparkProperties: Seq[(String, String)])
     extends ThreadSafeRpcEndpoint with Logging {
@@ -116,6 +122,42 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
             logWarning(s"Attempted to kill task $taskId for unknown executor $executorId.")
         }
 
+      //8.24 SkewTune NewAdd : Executor到Master的消息处理
+      case TransferRemovedFetch(nextExecutorId, nextTaskId, returnSeq) =>
+        executorDataMap.get(nextExecutorId) match {
+          case Some(executorInfo) =>
+            executorInfo.executorEndpoint.send(AddFetchCommand(nextTaskId, returnSeq))
+          case None =>
+            logWarning(s"Attempted to TransferRemovedFetch to Task $nextTaskId for unknown executor $nextExecutorId.")
+        }
+
+      case ReportBlockStatuses(taskID, seq, newTaskId) =>
+        logInfo(s"Master : Received Command ReportBlockStatuses for task $taskID (to new Task $newTaskId)")
+        val master = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskID)).master
+        master.reportBlockStatuses(taskID, seq, newTaskId)
+
+      case ReportTaskFinished(taskID: Long) =>
+        logInfo(s"Master : Received Command ReportTaskFinished for task $taskID")
+        val master = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskID)).master
+        master.reportTaskFinished(taskID)
+
+      case RegisterNewTask(taskId, executorId, seq) =>
+        logInfo(s"Master : Received Command RegisterNewTask for task $taskId on Executor $executorId")
+        val master = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskId)).master
+        master.registerNewTask(taskId, executorId, seq)
+        //8.24 判断SkewTune重新分配blocks的触发条件:executor上非第一个task注册上来，如果是taakset的最后一个task需要额外的调度
+        if (hasSkewTuneTaskRunByExecutorId.contains(executorId) && hasSkewTuneTaskRunByExecutorId(executorId)) {
+          logInfo("Master : Start SkewTune Split")
+          val isLastTask = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskId)).allPendingTasks.isEmpty
+          val (fetchCommands, resultCommands) = master.computerAndSplit(isLastTask)
+          for (command <- fetchCommands if scheduler.taskIdToExecutorId.contains(command.taskId)) {
+            executorDataMap(scheduler.taskIdToExecutorId(command.taskId)).executorEndpoint.send(command)
+          }
+          for (command <- resultCommands if scheduler.taskIdToExecutorId.contains(command.fromTaskId)) {
+            executorDataMap(scheduler.taskIdToExecutorId(command.fromTaskId)).executorEndpoint.send(command)
+          }
+        }
+        hasSkewTuneTaskRunByExecutorId(executorId) = true
     }
 
     override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
@@ -159,6 +201,8 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
       case RemoveExecutor(executorId, reason) =>
         removeExecutor(executorId, reason)
         context.reply(true)
+        //8.26 SkewTune NewAdd
+        hasSkewTuneTaskRunByExecutorId.remove(executorId)
 
       case RetrieveSparkProps =>
         context.reply(sparkProperties)
@@ -188,6 +232,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
       for (task <- tasks.flatten) {
         val ser = SparkEnv.get.closureSerializer.newInstance()
         val serializedTask = ser.serialize(task)
+        //8.24 如果序列化后的task大小超过akka单帧大小，则终止该taskSet
         if (serializedTask.limit >= akkaFrameSize - AkkaUtils.reservedSizeBytes) {
           val taskSetId = scheduler.taskIdToTaskSetId(task.taskId)
           scheduler.activeTaskSets.get(taskSetId).foreach { taskSet =>
@@ -249,7 +294,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     }
 
     // TODO (prashant) send conf instead of properties
-    driverEndpoint = .0rpcEnv.setupEndpoint(
+    driverEndpoint = rpcEnv.setupEndpoint(
       CoarseGrainedSchedulerBackend.ENDPOINT_NAME, new DriverEndpoint(rpcEnv, properties))
   }
 

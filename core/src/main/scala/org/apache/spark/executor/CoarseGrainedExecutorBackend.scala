@@ -20,30 +20,29 @@ package org.apache.spark.executor
 import java.net.URL
 import java.nio.ByteBuffer
 
-import org.apache.hadoop.conf.Configuration
+import org.apache.spark.TaskState.TaskState
+import org.apache.spark._
+import org.apache.spark.deploy.SparkHadoopUtil
+import org.apache.spark.deploy.worker.WorkerWatcher
+import org.apache.spark.rpc._
+import org.apache.spark.scheduler.TaskDescription
+import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages._
+import org.apache.spark.serializer.SerializerInstance
+import org.apache.spark.storage._
+import org.apache.spark.util.{SignalLogger, ThreadUtils, Utils}
 
 import scala.collection.mutable
 import scala.util.{Failure, Success}
 
-import org.apache.spark.rpc._
-import org.apache.spark._
-import org.apache.spark.TaskState.TaskState
-import org.apache.spark.deploy.SparkHadoopUtil
-import org.apache.spark.deploy.worker.WorkerWatcher
-import org.apache.spark.scheduler.TaskDescription
-import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages._
-import org.apache.spark.serializer.SerializerInstance
-import org.apache.spark.util.{ThreadUtils, SignalLogger, Utils}
-
 private[spark] class CoarseGrainedExecutorBackend(
-    override val rpcEnv: RpcEnv,
-    driverUrl: String,
-    executorId: String,
-    hostPort: String,
-    cores: Int,
-    userClassPath: Seq[URL],
-    env: SparkEnv)
-  extends ThreadSafeRpcEndpoint with ExecutorBackend with Logging {
+                                                   override val rpcEnv: RpcEnv,
+                                                   driverUrl: String,
+                                                   executorId: String,
+                                                   hostPort: String,
+                                                   cores: Int,
+                                                   userClassPath: Seq[URL],
+                                                   env: SparkEnv)
+  extends ThreadSafeRpcEndpoint with ExecutorBackend with SkewTuneBackend with Logging {
 
   Utils.checkHostPort(hostPort, "Expected hostport")
 
@@ -110,7 +109,76 @@ private[spark] class CoarseGrainedExecutorBackend(
       executor.stop()
       stop()
       rpcEnv.shutdown()
+
+    //8.24 SkewTune NewAdd : Master向Executor发送Message
+    case RemoveFetchCommand(nextExecutorId, nextTaskId, taskId, allBlocks) =>
+      logInfo("Driver commanded a removeFetch")
+      val worker = executor.skewTuneWorkerByTaskId.get(taskId)
+      if (worker.nonEmpty) {
+        val returnSeq = worker.get.fetchIterator.removeFetchRequests(allBlocks)
+        if (returnSeq.nonEmpty)
+          transferRemovedFetch(nextExecutorId, nextTaskId, returnSeq)
+      } else
+        logWarning(s"Task $taskId not exists in Executor $executorId")
+
+
+    case AddFetchCommand(taskId, allBlocks) =>
+      logInfo("Driver commanded a addFetch")
+      val worker = executor.skewTuneWorkerByTaskId.get(taskId)
+      if (worker.nonEmpty) {
+        worker.get.fetchIterator.addFetchRequests(allBlocks)
+      } else
+        logWarning(s"Task $taskId not exists in Executor $executorId")
+
+    case RemoveAndAddResultCommand(allBlockIds, fromTaskId, toTaskId) =>
+      logInfo("Driver commanded a removeAndAddResult")
+      val workerFrom = executor.skewTuneWorkerByTaskId.get(fromTaskId)
+      val workerTo = executor.skewTuneWorkerByTaskId.get(toTaskId)
+      if (workerFrom.nonEmpty && workerTo.nonEmpty) {
+        val returnResults = workerFrom.get.fetchIterator.removeFetchResults(allBlockIds)
+        workerTo.get.fetchIterator.addFetchResults(returnResults)
+      } else
+        logWarning(s"Task $fromTaskId or Task $toTaskId not exists in Executor $executorId")
   }
+
+  //8.24 SkewTune NewAdd Executor向Master报告
+  def transferRemovedFetch(nextExecutorId: String, nextTaskId: Long, returnSeq: Seq[(BlockManagerId, Seq[(BlockId, Long)])]): Unit = {
+    val msg = TransferRemovedFetch(nextExecutorId, nextTaskId, returnSeq)
+    logInfo(s"Executor $executorId send command removeAndAddResult $msg")
+    driver match {
+      case Some(driverRef) => driverRef.send(msg)
+      case None => logWarning(s"Drop $msg because has not yet connected to driver")
+    }
+  }
+
+  override def reportBlockStatuses(taskID: Long, seq: Seq[(BlockId, Byte)], newTaskId: Option[Long]): Unit = {
+    val msg = ReportBlockStatuses(taskID, seq, newTaskId)
+    logInfo(s"Executor $executorId send command reportBlockStatuses $msg")
+    driver match {
+      case Some(driverRef) => driverRef.send(msg)
+      case None => logWarning(s"Drop $msg because has not yet connected to driver")
+    }
+  }
+
+  override def registerNewTask(taskID: Long, executorId: String, seq: Seq[SkewTuneBlockInfo]): Unit = {
+    val msg = RegisterNewTask(taskID, executorId, seq)
+    logInfo(s"Executor $executorId send command registerNewTask $msg")
+    driver match {
+      case Some(driverRef) => driverRef.send(msg)
+      case None => logWarning(s"Drop $msg because has not yet connected to driver")
+    }
+  }
+
+  override def reportTaskFinished(taskID: Long): Unit = {
+    val msg = ReportTaskFinished(taskID)
+    logInfo(s"Executor $executorId send command reportTaskFinished $msg")
+    driver match {
+      case Some(driverRef) => driverRef.send(msg)
+      case None => logWarning(s"Drop $msg because has not yet connected to driver")
+    }
+  }
+
+  //End
 
   override def onDisconnected(remoteAddress: RpcAddress): Unit = {
     if (driver.exists(_.address == remoteAddress)) {
@@ -133,13 +201,13 @@ private[spark] class CoarseGrainedExecutorBackend(
 private[spark] object CoarseGrainedExecutorBackend extends Logging {
 
   private def run(
-      driverUrl: String,
-      executorId: String,
-      hostname: String,
-      cores: Int,
-      appId: String,
-      workerUrl: Option[String],
-      userClassPath: Seq[URL]) {
+                   driverUrl: String,
+                   executorId: String,
+                   hostname: String,
+                   cores: Int,
+                   appId: String,
+                   workerUrl: Option[String],
+                   userClassPath: Seq[URL]) {
 
     SignalLogger.register(log)
 
@@ -248,17 +316,17 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
   private def printUsageAndExit() = {
     System.err.println(
       """
-      |"Usage: CoarseGrainedExecutorBackend [options]
-      |
-      | Options are:
-      |   --driver-url <driverUrl>
-      |   --executor-id <executorId>
-      |   --hostname <hostname>
-      |   --cores <cores>
-      |   --app-id <appid>
-      |   --worker-url <workerUrl>
-      |   --user-class-path <url>
-      |""".stripMargin)
+        |"Usage: CoarseGrainedExecutorBackend [options]
+        |
+        | Options are:
+        |   --driver-url <driverUrl>
+        |   --executor-id <executorId>
+        |   --hostname <hostname>
+        |   --cores <cores>
+        |   --app-id <appid>
+        |   --worker-url <workerUrl>
+        |   --user-class-path <url>
+        | """.stripMargin)
     System.exit(1)
   }
 

@@ -24,15 +24,15 @@ import scala.util.{Failure, Success, Try}
 import org.apache.spark._
 import org.apache.spark.serializer.Serializer
 import org.apache.spark.shuffle.FetchFailedException
-import org.apache.spark.storage.{BlockId, BlockManagerId, ShuffleBlockFetcherIterator, ShuffleBlockId}
+import org.apache.spark.storage._
 import org.apache.spark.util.CompletionIterator
 
 private[hash] object BlockStoreShuffleFetcher extends Logging {
   //8.5 一个ShuffleBlockFetcherIterator会拉取一个Partition的所有Block！
   // 查询Executor的MapOutputTracker，由shuffleId和reduceId获得Array[MapStatus]再到Iterator的处理过程
   // 1.statuses：mapOutputTracker.getServerStatuses(shuffleId, reduceId)得到Array[(BlockManagerId, blockSize)]
-  // 2.splitsByAddress：再处理为HashMap[BlockManagerId, ArrayBuffer[(array_index, blockSize)]]
-  // 3.blocksByAddress：再处理为Seq[(BlockManagerId, Seq[(BlockId, blockSize)])]
+  // 2.splitsByAddress：将之前的Array`按照BlockManagerId合并`为HashMap[BlockManagerId, ArrayBuffer[(array_index, blockSize)]]，array_index代表partitionId
+  // 3.blocksByAddress：再处理为Seq[(BlockManagerId, Seq[(BlockId=ShuffleBlockId(shuffleId,mapId=(array_index),reduceId), blockSize)])]
   // 4.blockFetcherItr：再包装为ShuffleBlockFetcherIterator(shuffleClient, blockManager, blocksByAddress)：Iterator[(BlockId, Try[Iterator[A=(key,value)]])]
   // 5.itr：通过unpackBlock选出blockFetcherItr中的Success，将其结果包装成Iterator[A=(key,value)]
   // 6.completionIter：再包装为CompletionIterator[T=(key,value)]
@@ -52,6 +52,9 @@ private[hash] object BlockStoreShuffleFetcher extends Logging {
     logDebug("Fetching map output location for shuffle %d, reduce %d took %d ms".format(
       shuffleId, reduceId, System.currentTimeMillis - startTime))
 
+    //8.21 将之前的Array`按照BlockManagerId合并`为HashMap[BlockManagerId, ArrayBuffer[(array_index, blockSize)]],
+    // 因为statuses.length = partitionNumber,statuses的index按照各个ShuffleMapTask的完成顺序增长，
+    // 也就是shuffle中的临时文件block和mapId的对应关系是随机的
     val splitsByAddress = new HashMap[BlockManagerId, ArrayBuffer[(Int, Long)]]
     for (((address, size), index) <- statuses.zipWithIndex) {
       splitsByAddress.getOrElseUpdate(address, ArrayBuffer()) += ((index, size))
@@ -90,6 +93,14 @@ private[hash] object BlockStoreShuffleFetcher extends Logging {
       serializer,
       // Note: we use getSizeAsMb when no suffix is provided for backwards compatibility
       SparkEnv.get.conf.getSizeAsMb("spark.reducer.maxSizeInFlight", "48m") * 1024 * 1024)
+
+    //8.19 SkewTune NewAdd，根据TaskContextImpl中传入的原先的和新注入的信息，创建SkewTuneWorker（一个Task对应一个）
+    val contextImpl = context.asInstanceOf[TaskContextImpl]
+    contextImpl.skewTuneWorker = new SkewTuneWorker(contextImpl.executorId,
+      contextImpl.skewTuneBackend,
+      blockFetcherItr,
+      contextImpl.taskAttemptId) //8.27 taskAttemptId = taskId
+
     val itr = blockFetcherItr.flatMap(unpackBlock)
 
     val completionIter = CompletionIterator[T, Iterator[T]](itr, {

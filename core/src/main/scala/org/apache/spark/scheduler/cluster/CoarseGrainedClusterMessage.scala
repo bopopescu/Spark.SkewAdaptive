@@ -21,6 +21,7 @@ import java.nio.ByteBuffer
 
 import org.apache.spark.TaskState.TaskState
 import org.apache.spark.rpc.RpcEndpointRef
+import org.apache.spark.storage.{BlockId, BlockManagerId, SkewTuneBlockInfo}
 import org.apache.spark.util.{SerializableBuffer, Utils}
 
 private[spark] sealed trait CoarseGrainedClusterMessage extends Serializable
@@ -35,28 +36,76 @@ private[spark] object CoarseGrainedClusterMessages {
   case class KillTask(taskId: Long, executor: String, interruptThread: Boolean)
     extends CoarseGrainedClusterMessage
 
+  //8.24 SkewTune NewAdd Driver到Executor的消息
+  case class RemoveFetchCommand(nextExecutorId: String, nextTaskId: Long, taskId: Long, allBlocks: Seq[(BlockManagerId, Seq[BlockId])])
+    extends CoarseGrainedClusterMessage
+
+  case class AddFetchCommand(taskId: Long, allBlocks: Seq[(BlockManagerId, Seq[(BlockId, Long)])])
+    extends CoarseGrainedClusterMessage
+
+  case class RemoveAndAddResultCommand(allBlockIds: Seq[BlockId], fromTaskId: Long, toTaskId: Long)
+    extends CoarseGrainedClusterMessage
+
+  //End
+  //8.24 SkewTune NewAdd Executor到Driver的消息
+  case class TransferRemovedFetch(nextExecutorId: String, nextTaskId: Long, returnSeq: Seq[(BlockManagerId, Seq[(BlockId, Long)])])
+    extends CoarseGrainedClusterMessage
+
+  /*  object TransferRemovedFetch {
+      def apply(nextExecutorId: String, nextTaskId: Long, returnSeq: Seq[(BlockManagerId, Seq[(BlockId, Long)])]): TransferRemovedFetch = {
+        new TransferRemovedFetch(nextExecutorId, nextTaskId, returnSeq)
+      }
+    }*/
+  case class ReportBlockStatuses(taskID: Long, seq: Seq[(BlockId, Byte)], newTaskId: Option[Long])
+    extends CoarseGrainedClusterMessage
+
+  /*  object ReportBlockStatuses {
+      def apply(taskID: Long, seq: Seq[(BlockId, Byte)], newTaskId: Option[Long]): ReportBlockStatuses = {
+        new ReportBlockStatuses(taskID, seq, newTaskId)
+      }
+    }*/
+
+  case class RegisterNewTask(taskID: Long, executorId: String, seq: Seq[SkewTuneBlockInfo])
+    extends CoarseGrainedClusterMessage
+
+  /*object RegisterNewTask {
+    def apply(taskID: Long, executorId: String, seq: Seq[SkewTuneBlockInfo]): RegisterNewTask = {
+      new RegisterNewTask(taskID, executorId, seq)
+    }
+  }*/
+
+  case class ReportTaskFinished(taskID: Long) extends CoarseGrainedClusterMessage
+
+  /*object ReportTaskFinished {
+    def apply(taskID: Long): ReportTaskFinished = {
+      new ReportTaskFinished(taskID)
+    }
+  }*/
+
+  //End
+
   case object RegisteredExecutor extends CoarseGrainedClusterMessage
 
   case class RegisterExecutorFailed(message: String) extends CoarseGrainedClusterMessage
 
   // Executors to driver
   case class RegisterExecutor(
-      executorId: String,
-      executorRef: RpcEndpointRef,
-      hostPort: String,
-      cores: Int,
-      logUrls: Map[String, String])
+                               executorId: String,
+                               executorRef: RpcEndpointRef,
+                               hostPort: String,
+                               cores: Int,
+                               logUrls: Map[String, String])
     extends CoarseGrainedClusterMessage {
     Utils.checkHostPort(hostPort, "Expected host port")
   }
 
   case class StatusUpdate(executorId: String, taskId: Long, state: TaskState,
-    data: SerializableBuffer) extends CoarseGrainedClusterMessage
+                          data: SerializableBuffer) extends CoarseGrainedClusterMessage
 
   object StatusUpdate {
     /** Alternate factory method that takes a ByteBuffer directly for the data field */
     def apply(executorId: String, taskId: Long, state: TaskState, data: ByteBuffer)
-      : StatusUpdate = {
+    : StatusUpdate = {
       StatusUpdate(executorId, taskId, state, new SerializableBuffer(data))
     }
   }
@@ -76,7 +125,7 @@ private[spark] object CoarseGrainedClusterMessages {
 
   // Exchanged between the driver and the AM in Yarn client mode
   case class AddWebUIFilter(
-      filterName: String, filterParams: Map[String, String], proxyBase: String)
+                             filterName: String, filterParams: Map[String, String], proxyBase: String)
     extends CoarseGrainedClusterMessage
 
   // Messages exchanged between the driver and the cluster manager for executor allocation

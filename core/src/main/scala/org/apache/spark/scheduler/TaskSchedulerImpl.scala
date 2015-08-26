@@ -291,6 +291,7 @@ private[spark] class TaskSchedulerImpl(
     // NOTE: the preferredLocality order: PROCESS_LOCAL, NODE_LOCAL, NO_PREF, RACK_LOCAL, ANY
     var launchedTask = false
     for (taskSet <- sortedTaskSets; maxLocality <- taskSet.myLocalityLevels) {
+      //8.25 遍历所有locality level，遇到第一个launchedTask返回为true则停止，locality level等信息构造成taskInfo保存在taskSetManager中
       do {
         launchedTask = resourceOfferSingleTaskSet(
             taskSet, maxLocality, shuffledOffers, availableCpus, tasks)

@@ -23,17 +23,18 @@ import java.net.URL
 import java.nio.ByteBuffer
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 
-import scala.collection.JavaConversions._
-import scala.collection.mutable.{ArrayBuffer, HashMap}
-import scala.util.control.NonFatal
-
 import org.apache.spark._
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.scheduler.{DirectTaskResult, IndirectTaskResult, Task}
 import org.apache.spark.shuffle.FetchFailedException
-import org.apache.spark.storage.{StorageLevel, TaskResultBlockId}
+import org.apache.spark.storage._
 import org.apache.spark.unsafe.memory.TaskMemoryManager
 import org.apache.spark.util._
+
+import scala.collection.JavaConversions._
+import scala.collection.mutable
+import scala.collection.mutable.{ArrayBuffer, HashMap}
+import scala.util.control.NonFatal
 
 /**
  * Spark executor, backed by a threadpool to run tasks.
@@ -113,6 +114,9 @@ private[spark] class Executor(
   // Executor for the heartbeat task.
   private val heartbeater = ThreadUtils.newDaemonSingleThreadScheduledExecutor("driver-heartbeater")
 
+  //8.24 SkewTune NewAdd :　Map taskId -> worker
+  val skewTuneWorkerByTaskId = new mutable.HashMap[Long, SkewTuneWorker]()
+
   startDriverHeartbeater()
 
   def launchTask(
@@ -124,6 +128,10 @@ private[spark] class Executor(
     val tr = new TaskRunner(context, taskId = taskId, attemptNumber = attemptNumber, taskName,
       serializedTask)
     runningTasks.put(taskId, tr)
+    //8.24 每个task都是由SchedulerBackend单独send过来的，然后放入executor的runningTask中，
+    // 然后执行cached线程池的execute方法，但是task不知道什么时候被线程池执行，所以send过来的task是被缓存起来的。
+    //8.25 一个executor可以执行多个Task，由于是cached线程池，所以无法限制单个executor同时运行的线程数量，
+    // 限制策略可能在Master端，根据CPU数量分配workOffer
     threadPool.execute(tr)
   }
 
@@ -189,6 +197,10 @@ private[spark] class Executor(
       startGCTime = computeTotalGcTime()
 
       try {
+        //8.24 SkewTune NewAdd : Executor保存一份方便查找，只有task在实际被执行时才真正添加到Map中
+        val taskContextImpl: TaskContextImpl = task.context
+        skewTuneWorkerByTaskId += ((taskContextImpl.skewTuneWorker.taskId, taskContextImpl.skewTuneWorker))
+
         val (taskFiles, taskJars, taskBytes) = Task.deserializeWithDependencies(serializedTask)
         updateDependencies(taskFiles, taskJars)
         task = ser.deserialize[Task[Any]](taskBytes, Thread.currentThread.getContextClassLoader)
@@ -210,7 +222,8 @@ private[spark] class Executor(
         // Run the actual task and measure its runtime.
         taskStart = System.currentTimeMillis()
         val value = try {
-          task.run(taskAttemptId = taskId, attemptNumber = attemptNumber)
+          task.run(taskAttemptId = taskId, attemptNumber = attemptNumber,
+            executorId = executorId, skewTuneBackend = execBackend.asInstanceOf[SkewTuneBackend]) //8.19 : SkewTune NewAdd
         } finally {
           // Note: this memory freeing logic is duplicated in DAGScheduler.runLocallyWithinThread;
           // when changing this, make sure to update both copies.
@@ -317,6 +330,10 @@ private[spark] class Executor(
         // Release memory used by this thread for accumulators
         Accumulators.clear()
         runningTasks.remove(taskId)
+
+        //8.24 SkewTune NewAdd : Task Runner内部类 1.向Master报告Task Finished。 2.在Executor中的Map中删除引用
+        execBackend.asInstanceOf[SkewTuneBackend].reportTaskFinished(task.context.skewTuneWorker.taskId)
+        skewTuneWorkerByTaskId -= task.context.skewTuneWorker.taskId
       }
     }
   }

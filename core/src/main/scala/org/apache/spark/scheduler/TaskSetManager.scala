@@ -22,6 +22,8 @@ import java.nio.ByteBuffer
 import java.util.Arrays
 import java.util.concurrent.ConcurrentLinkedQueue
 
+import org.apache.spark.storage.SkewTuneMaster
+
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.HashMap
 import scala.collection.mutable.HashSet
@@ -177,6 +179,9 @@ private[spark] class TaskSetManager(
   override def schedulingMode: SchedulingMode = SchedulingMode.NONE
 
   var emittedTaskSizeWarning = false
+
+  //8.26 一个taskset一个master，如果全局一个master，split时会串到其他stage的task中去
+  val master = new SkewTuneMaster(this)
 
   /**
    * Add a task to all the pending-task lists that it should be on. If readding is set, we are
