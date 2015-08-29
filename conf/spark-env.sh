@@ -2,10 +2,12 @@
 
 # This file is sourced when running various Spark programs.
 # Copy it as spark-env.sh and edit that to configure Spark for your site.
-export JAVA_HOME=/usr
+ #export JAVA_HOME=/usr
+ export JAVA_HOME=$HOME/jdk1.7.0_79
+ export HADOOP_HOME=$HOME/hadoopOnWin
 # Options read when launching programs locally with 
 # ./bin/run-example or ./bin/spark-submit
-export HADOOP_CONF_DIR=/home/spark/hadoop-1.2.1/conf
+# export HADOOP_CONF_DIR=/home/spark/hadoop-1.2.1/conf
 # - HADOOP_CONF_DIR, to point Spark towards Hadoop configuration files
 # - SPARK_LOCAL_IP, to set the IP address Spark binds to on this node
 # - SPARK_PUBLIC_DNS, to set the public dns name of the driver program
@@ -30,6 +32,10 @@ export HADOOP_CONF_DIR=/home/spark/hadoop-1.2.1/conf
 # - SPARK_YARN_DIST_ARCHIVES, Comma separated list of archives to be distributed with the job.
 
 # Options for the daemons used in the standalone deploy mode
+ export SPARK_MASTER_IP=127.0.0.1
+ export SPARK_MASTER_OPTS="-Xdebug -Xrunjdwp:transport=dt_socket,address=8002,server=y,suspend=n"
+ export SPARK_WORKER_OPTS="-Xdebug -Xrunjdwp:transport=dt_socket,address=8003,server=y,suspend=n"
+
 # - SPARK_MASTER_IP, to bind the master to a different IP address or hostname
 # - SPARK_MASTER_PORT / SPARK_MASTER_WEBUI_PORT, to use non-default ports for the master
 # - SPARK_MASTER_OPTS, to set config properties only for the master (e.g. "-Dx=y")

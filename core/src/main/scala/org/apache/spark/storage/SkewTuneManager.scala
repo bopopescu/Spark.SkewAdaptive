@@ -11,7 +11,7 @@ import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 /** Created by Feiyu on 2015/8/18. **/
 private[spark] class SkewTuneWorker(val executorID: String,
                                     private val backend: SkewTuneBackend,
-                                    val fetchIterator: ShuffleBlockFetcherIterator,
+                                    var fetchIterator: ShuffleBlockFetcherIterator,
                                     val taskId: Long) extends Logging {
 
   val blocks = new mutable.HashMap[BlockId, SkewTuneBlockInfo]()
@@ -45,12 +45,12 @@ private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager) extends 
   val activeTasks = new mutable.HashMap[Long, SkewTuneTaskInfo] //sbt:error private class escapes its defining scope。因为SkewTuneTaskInfo是private，但是activeTask是public，所以内部类逃逸了
 
   def computerAndSplit(isLastTask: Boolean): (Seq[RemoveFetchCommand], Seq[RemoveAndAddResultCommand]) = {
-    logInfo(s"Master ${taskSetManager.name} computerAndSplit")
+    logInfo(s"Master on taskSet ${taskSetManager.name} computerAndSplit")
 
     val transferFetches = new mutable.HashMap[(SkewTuneTaskInfo, SkewTuneTaskInfo), mutable.Buffer[SkewTuneBlockInfo]]
     val transferResults = new mutable.HashMap[(SkewTuneTaskInfo, SkewTuneTaskInfo), mutable.Buffer[SkewTuneBlockInfo]]
 
-    val sortedTasks = new ListBuffer[SkewTuneTaskInfo] ++ activeTasks.values.toList.sortBy(_.blockMap.map(_._2.blockSize).sum).reverse
+    val sortedTasks = new ListBuffer[SkewTuneTaskInfo] ++= activeTasks.values.toList.sortBy(_.blockMap.map(_._2.blockSize).sum).reverse
     val taskToSplit = if (sortedTasks.length >= 2) Some(sortedTasks.remove(0)) else None
     val secondTask = sortedTasks.head
     val maxSizeLine = secondTask.blockMap.map(_._2.blockSize).sum
@@ -92,23 +92,29 @@ private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager) extends 
     }
     //除了第一个task，其他task的size一致，然后再次分配使所有task的block的总size相等
     def maximumFairnessSchedule(): Unit = {
-      val sizeToAddAvg = (blocksToSchedule.map(_._2.blockSize).sum - maxSizeLine) / (sortedTasks.length + 1)
-      //8.26 如果所有task都分了还有剩余的，平均分配给所有task
-      for (task <- sortedTasks if blocksToSchedule.map(_._2.blockSize).sum > sizeToAddAvg) {
-        var sizeAdded: Long = 0
-        for (blockInfo <- blocksToSchedule if sizeAdded <= sizeToAddAvg) {
-          sizeAdded = sizeAdded + blockInfo._2.blockSize
-          blockInfo._2.blockState match {
-            case SkewTuneBlockStatus.REMOTE_FETCH_WAITING =>
-              val blocks = transferFetches.getOrElseUpdate((taskToSplit.get, task), new ArrayBuffer[SkewTuneBlockInfo]())
-              blocks += blockInfo._2
-            case _ =>
-              if (taskToSplit.get.executorId == task.executorId) {
-                val blocks = transferResults.getOrElseUpdate((taskToSplit.get, task), new ArrayBuffer[SkewTuneBlockInfo]())
-                blocks += blockInfo._2
+      val blocksSizeToSchedule = blocksToSchedule.map(_._2.blockSize).sum
+      //8.27 条件：task1的size大于task2的size，task1的可分配size大于（task1-task2的size之差再平均的值）
+      if(blocksSizeToSchedule + blocksSizeToSchedule > maxSizeLine){
+        val sizeToAddAvg = (blocksSizeToSchedule + blocksSizeToSchedule - maxSizeLine) / (sortedTasks.length + 1)
+        if(sizeToAddAvg > 0 && blocksSizeToSchedule > sizeToAddAvg){
+          //8.26 如果所有task都分了还有剩余的，平均分配给所有task
+          for (task <- sortedTasks if blocksToSchedule.map(_._2.blockSize).sum > sizeToAddAvg) {
+            var sizeAdded: Long = 0
+            for (blockInfo <- blocksToSchedule if sizeAdded <= sizeToAddAvg) {
+              sizeAdded = sizeAdded + blockInfo._2.blockSize
+              blockInfo._2.blockState match {
+                case SkewTuneBlockStatus.REMOTE_FETCH_WAITING =>
+                  val blocks = transferFetches.getOrElseUpdate((taskToSplit.get, task), new ArrayBuffer[SkewTuneBlockInfo]())
+                  blocks += blockInfo._2
+                case _ =>
+                  if (taskToSplit.get.executorId == task.executorId) {
+                    val blocks = transferResults.getOrElseUpdate((taskToSplit.get, task), new ArrayBuffer[SkewTuneBlockInfo]())
+                    blocks += blockInfo._2
+                  }
               }
+              blocksToSchedule -= blockInfo._1
+            }
           }
-          blocksToSchedule -= blockInfo._1
         }
       }
       logInfo(s"maximumFairnessSchedule : Fetches : $transferFetches , Results : $transferResults")
@@ -135,24 +141,24 @@ private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager) extends 
   def registerNewTask(taskID: Long, executorId: String, seq: Seq[SkewTuneBlockInfo]): Unit = {
     logInfo(s"registerNewTask : task $taskID , executorId $executorId , seq $seq")
     if (!activeTasks.contains(taskID)) {
-      val blockMap: mutable.Map[BlockId, SkewTuneBlockInfo] = new mutable.HashMap[BlockId, SkewTuneBlockInfo]()
-      blockMap ++= seq.map(info => (info.blockId, info))
+      val blockMap = new mutable.HashMap[BlockId, SkewTuneBlockInfo]() ++= seq.map(info => (info.blockId, info))
       activeTasks += ((taskID, SkewTuneTaskInfo(taskID, executorId, blockMap)))
     }
   }
 
-  def reportBlockStatuses(taskID: Long, seq: Seq[(BlockId, Byte)], newTaskId: Option[Long] = None): Unit = {
-    logInfo(s"reportBlockStatuses : task $taskID , seq $seq , newTaskID : $newTaskId")
-    if (activeTasks.contains(taskID)) {
-      val blockMap = activeTasks.get(taskID).get.blockMap
-      val blockMapInNewTask: Option[mutable.Map[BlockId, SkewTuneBlockInfo]] = if (newTaskId.nonEmpty && activeTasks.contains(newTaskId.get)) Option(activeTasks.get(newTaskId.get).get.blockMap) else None
+  def reportBlockStatuses(taskId: Long, seq: Seq[(BlockId, Byte)], newTaskId: Option[Long] = None): Unit = {
+    logInfo(s"reportBlockStatuses : task $taskId , seq $seq , newTaskID : $newTaskId")
+    if (activeTasks.contains(taskId)) {
+      val blockMapInOldTask = activeTasks.get(taskId).get.blockMap
+      val blockMapInNewTask: Option[mutable.Map[BlockId, SkewTuneBlockInfo]] = 
+        if (newTaskId.nonEmpty && activeTasks.contains(newTaskId.get)) Some(activeTasks(newTaskId.get).blockMap) else None
 
-      for ((blockId, newBlockState) <- seq if blockMap.contains(blockId)) {
-        val skewTuneBlockInfo = blockMap.get(blockId).get
+      for ((blockId, newBlockState) <- seq if blockMapInOldTask.contains(blockId)) {
+        val skewTuneBlockInfo = blockMapInOldTask(blockId)
         skewTuneBlockInfo.blockState = if (newBlockState > 0) newBlockState else skewTuneBlockInfo.blockState
-        if (blockMapInNewTask.nonEmpty) {
+        if (blockMapInNewTask.nonEmpty && taskId != newTaskId.get) {
           blockMapInNewTask.get += ((blockId, skewTuneBlockInfo))
-          blockMap -= blockId
+          blockMapInOldTask -= blockId
         }
       }
     }

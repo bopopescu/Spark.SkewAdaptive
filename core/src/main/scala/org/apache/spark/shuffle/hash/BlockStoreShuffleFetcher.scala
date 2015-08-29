@@ -96,10 +96,7 @@ private[hash] object BlockStoreShuffleFetcher extends Logging {
 
     //8.19 SkewTune NewAdd，根据TaskContextImpl中传入的原先的和新注入的信息，创建SkewTuneWorker（一个Task对应一个）
     val contextImpl = context.asInstanceOf[TaskContextImpl]
-    contextImpl.skewTuneWorker = new SkewTuneWorker(contextImpl.executorId,
-      contextImpl.skewTuneBackend,
-      blockFetcherItr,
-      contextImpl.taskAttemptId) //8.27 taskAttemptId = taskId
+    contextImpl.skewTuneWorker.fetchIterator = blockFetcherItr
 
     val itr = blockFetcherItr.flatMap(unpackBlock)
 

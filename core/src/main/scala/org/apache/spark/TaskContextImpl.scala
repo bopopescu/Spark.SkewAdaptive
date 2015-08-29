@@ -31,13 +31,15 @@ private[spark] class TaskContextImpl(
     override val attemptNumber: Int,
     override val taskMemoryManager: TaskMemoryManager,
     val runningLocally: Boolean = false,
+    val taskMetrics: TaskMetrics = TaskMetrics.empty,
     val executorId: String = null, //8.19 SkewTune NewAdd
     val skewTuneBackend: SkewTuneBackend = null,
-    val taskMetrics: TaskMetrics = TaskMetrics.empty)
+    val isShuffleMapTask: Boolean = false)
   extends TaskContext
   with Logging {
 
-  var skewTuneWorker: SkewTuneWorker = _ //8.19 SkewTune NewAdd
+  //8.27 taskAttemptId = taskId
+  var skewTuneWorker = new SkewTuneWorker(executorId, skewTuneBackend, null, taskAttemptId) //8.19 SkewTune NewAdd
 
   // For backwards-compatibility; this method is now deprecated as of 1.3.0.
   override def attemptId(): Long = taskAttemptId

@@ -116,6 +116,7 @@ private[spark] class Executor(
 
   //8.24 SkewTune NewAdd :　Map taskId -> worker
   val skewTuneWorkerByTaskId = new mutable.HashMap[Long, SkewTuneWorker]()
+  private val executorInstance: Executor = this
 
   startDriverHeartbeater()
 
@@ -197,14 +198,17 @@ private[spark] class Executor(
       startGCTime = computeTotalGcTime()
 
       try {
-        //8.24 SkewTune NewAdd : Executor保存一份方便查找，只有task在实际被执行时才真正添加到Map中
-        val taskContextImpl: TaskContextImpl = task.context
-        skewTuneWorkerByTaskId += ((taskContextImpl.skewTuneWorker.taskId, taskContextImpl.skewTuneWorker))
-
         val (taskFiles, taskJars, taskBytes) = Task.deserializeWithDependencies(serializedTask)
         updateDependencies(taskFiles, taskJars)
         task = ser.deserialize[Task[Any]](taskBytes, Thread.currentThread.getContextClassLoader)
         task.setTaskMemoryManager(taskMemoryManager)
+
+        /*//8.24 SkewTune NewAdd : Executor保存一份方便查找，只有task在实际被执行时才真正添加到Map中
+        //8.27 error : null point ,因为taskContextImpl.skewTuneWorker在BlockStoreShuffleFetcher才被赋值
+        //8.27 移到task = ser.  下方，否则task也为null
+        //8.27 task.run中才生成了taskContext，当前context为null
+        val taskContextImpl: TaskContextImpl = task.context
+        skewTuneWorkerByTaskId += ((taskContextImpl.skewTuneWorker.taskId, taskContextImpl.skewTuneWorker))*/
 
         // If this task has been killed before we deserialized it, let's quit now. Otherwise,
         // continue executing the task.
@@ -223,7 +227,8 @@ private[spark] class Executor(
         taskStart = System.currentTimeMillis()
         val value = try {
           task.run(taskAttemptId = taskId, attemptNumber = attemptNumber,
-            executorId = executorId, skewTuneBackend = execBackend.asInstanceOf[SkewTuneBackend]) //8.19 : SkewTune NewAdd
+            executorId = executorId, skewTuneBackend = execBackend.asInstanceOf[SkewTuneBackend],
+            executorInstance = executorInstance) //8.19 : SkewTune NewAdd
         } finally {
           // Note: this memory freeing logic is duplicated in DAGScheduler.runLocallyWithinThread;
           // when changing this, make sure to update both copies.
@@ -332,7 +337,9 @@ private[spark] class Executor(
         runningTasks.remove(taskId)
 
         //8.24 SkewTune NewAdd : Task Runner内部类 1.向Master报告Task Finished。 2.在Executor中的Map中删除引用
-        execBackend.asInstanceOf[SkewTuneBackend].reportTaskFinished(task.context.skewTuneWorker.taskId)
+        //8.28 不能再这儿reportTaskFinished，因为有可能是非ShuffleMapTask，非ShuffleRDD，没有用到ShuffleBlockIterator，
+        // 就没有registerNewTask，所以找不到task，把taskFinish移动到ShuffleBlockIterator中
+        /*execBackend.asInstanceOf[SkewTuneBackend].reportTaskFinished(task.context.skewTuneWorker.taskId)*/
         skewTuneWorkerByTaskId -= task.context.skewTuneWorker.taskId
       }
     }

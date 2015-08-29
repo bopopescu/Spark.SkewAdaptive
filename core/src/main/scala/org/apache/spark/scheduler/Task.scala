@@ -20,16 +20,14 @@ package org.apache.spark.scheduler
 import java.io.{ByteArrayOutputStream, DataInputStream, DataOutputStream}
 import java.nio.ByteBuffer
 
-import org.apache.spark.storage.{SkewTuneBackend, SkewTuneWorker}
+import org.apache.spark.executor.{Executor, TaskMetrics}
+import org.apache.spark.serializer.SerializerInstance
+import org.apache.spark.storage.SkewTuneBackend
+import org.apache.spark.unsafe.memory.TaskMemoryManager
+import org.apache.spark.util.{ByteBufferInputStream, Utils}
+import org.apache.spark.{TaskContext, TaskContextImpl}
 
 import scala.collection.mutable.HashMap
-
-import org.apache.spark.{TaskContextImpl, TaskContext}
-import org.apache.spark.executor.{ExecutorBackend, TaskMetrics}
-import org.apache.spark.serializer.SerializerInstance
-import org.apache.spark.unsafe.memory.TaskMemoryManager
-import org.apache.spark.util.ByteBufferInputStream
-import org.apache.spark.util.Utils
 
 
 /**
@@ -45,7 +43,7 @@ import org.apache.spark.util.Utils
  * @param stageId id of the stage this task belongs to
  * @param partitionId index of the number in the RDD
  */
-private[spark] abstract class Task[T](val stageId: Int, var partitionId: Int) extends Serializable {
+private[spark] abstract class Task[T](val stageId: Int, var partitionId: Int) extends Serializable{
 
   /**
    * Called by [[Executor]] to run this task.
@@ -54,7 +52,9 @@ private[spark] abstract class Task[T](val stageId: Int, var partitionId: Int) ex
    * @param attemptNumber how many times this task has been attempted (0 for the first attempt)
    * @return the result of the task
    */
-  final def run(taskAttemptId: Long, attemptNumber: Int, executorId: String = null, skewTuneBackend: SkewTuneBackend = null): T = {
+  final def run(taskAttemptId: Long, attemptNumber: Int,
+                executorId: String = null, skewTuneBackend: SkewTuneBackend = null,
+                executorInstance: Executor = null): T = {
     context = new TaskContextImpl(
       stageId = stageId,
       partitionId = partitionId,
@@ -63,10 +63,19 @@ private[spark] abstract class Task[T](val stageId: Int, var partitionId: Int) ex
       taskMemoryManager = taskMemoryManager,
       runningLocally = false,
       executorId = executorId, //sbt: error: parameter is already specified at parameter position 7 调用构造函数时一种是传入参数名=参数值，一种是直接传入参数值。注意方式的统一
-      skewTuneBackend = skewTuneBackend) //8.19 SkewTune NewAdd
+      skewTuneBackend = skewTuneBackend,//8.19 SkewTune NewAdd
+      isShuffleMapTask = this.isInstanceOf[ShuffleMapTask]) //8.28 判断是否是sshufleMapTask，是才有worker
     TaskContext.setTaskContext(context)
     context.taskMetrics.setHostname(Utils.localHostName())
     taskThread = Thread.currentThread()
+
+    //8.24 SkewTune NewAdd : Executor保存一份方便查找，只有task在实际被执行时才真正添加到Map中
+    //8.28 SkewTune NewAdd : 放到这儿才不为null
+    /*if(context.isShuffleMapTask)*/
+    executorInstance.skewTuneWorkerByTaskId += ((context.skewTuneWorker.taskId, context.skewTuneWorker))
+    /*else
+      println("Task.run 非shuffleMapTask，跳过")*/
+
     if (_killed) {
       kill(interruptThread = false)
     }

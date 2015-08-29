@@ -24,6 +24,7 @@ import java.util.concurrent.ConcurrentLinkedQueue
 
 import org.apache.spark.storage.SkewTuneMaster
 
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.HashMap
 import scala.collection.mutable.HashSet
@@ -182,6 +183,8 @@ private[spark] class TaskSetManager(
 
   //8.26 一个taskset一个master，如果全局一个master，split时会串到其他stage的task中去
   val master = new SkewTuneMaster(this)
+  //sbt：error:values cannot be volatile。因为volatile表示便以其不能确定岂会发生变化，与val矛盾
+  val hasSkewTuneTaskRunByExecutorId = new mutable.HashMap[String, Boolean]
 
   /**
    * Add a task to all the pending-task lists that it should be on. If readding is set, we are

@@ -26,7 +26,6 @@ import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages._
 import org.apache.spark.util.{AkkaUtils, SerializableBuffer, ThreadUtils, Utils}
 import org.apache.spark.{ExecutorAllocationClient, Logging, SparkEnv, SparkException, TaskState}
 
-import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet}
 
 /**
@@ -70,7 +69,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
   //8.24 SkewTune NewAdd : hasSkewTuneTaskRunByExecutorId 记录executor是否运行过task
   /*val master = new SkewTuneMaster*/
   //sbt：error:values cannot be volatile。因为volatile表示便以其不能确定岂会发生变化，与val矛盾
-  val hasSkewTuneTaskRunByExecutorId = new mutable.HashMap[String, Boolean]
+  /*val hasSkewTuneTaskRunByExecutorId = new mutable.HashMap[String, Boolean]*/
 
   class DriverEndpoint(override val rpcEnv: RpcEnv, sparkProperties: Seq[(String, String)])
     extends ThreadSafeRpcEndpoint with Logging {
@@ -145,9 +144,12 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         logInfo(s"Master : Received Command RegisterNewTask for task $taskId on Executor $executorId")
         val master = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskId)).master
         master.registerNewTask(taskId, executorId, seq)
-        //8.24 判断SkewTune重新分配blocks的触发条件:executor上非第一个task注册上来，如果是taakset的最后一个task需要额外的调度
+
+        val hasSkewTuneTaskRunByExecutorId = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskId)).hasSkewTuneTaskRunByExecutorId
+        //8.24 判断SkewTune重新分配blocks的触发条件:该taskset中正在运行的executor上非第一个task注册上来时调度。
+        // 如果是taakset的最后一个task需要额外的调度
         if (hasSkewTuneTaskRunByExecutorId.contains(executorId) && hasSkewTuneTaskRunByExecutorId(executorId)) {
-          logInfo("Master : Start SkewTune Split")
+          logInfo(s"Master on taskSetManager ${master.taskSetManager.name}: Start SkewTune Split")
           val isLastTask = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskId)).allPendingTasks.isEmpty
           val (fetchCommands, resultCommands) = master.computerAndSplit(isLastTask)
           for (command <- fetchCommands if scheduler.taskIdToExecutorId.contains(command.taskId)) {
@@ -202,7 +204,9 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         removeExecutor(executorId, reason)
         context.reply(true)
         //8.26 SkewTune NewAdd
-        hasSkewTuneTaskRunByExecutorId.remove(executorId)
+        for(taskset <- scheduler.activeTaskSets.values){
+          taskset.hasSkewTuneTaskRunByExecutorId.remove(executorId)
+        }
 
       case RetrieveSparkProps =>
         context.reply(sparkProperties)

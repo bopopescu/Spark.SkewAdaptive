@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="CompilerConfiguration">
-    <option name="DEFAULT_COMPILER" value="Javac" />
     <resourceExtensions />
     <wildcardResourcePatterns>
       <entry name="!?*.java" />
@@ -12,157 +11,25 @@
       <entry name="!?*.flex" />
       <entry name="!?*.kt" />
       <entry name="!?*.clj" />
+      <entry name="!?*.aj" />
     </wildcardResourcePatterns>
     <annotationProcessing>
       <profile default="true" name="Default" enabled="false">
         <processorPath useClasspath="true" />
       </profile>
-      <profile default="false" name="Annotation profile for hive" enabled="true">
+      <profile default="false" name="Annotation profile for spark-core_2.10" enabled="true">
         <sourceOutputDir name="target\generated-sources\annotations" />
         <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <processorPath useClasspath="true" />
-        <module name="hive" />
+        <module name="spark-core_2.10" />
       </profile>
-      <profile default="false" name="Annotation profile for sql" enabled="true">
+      <profile default="false" name="Annotation profile for spark-hive_2.10" enabled="true">
         <sourceOutputDir name="target\generated-sources\annotations" />
         <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <processorPath useClasspath="true" />
-        <module name="sql" />
-      </profile>
-      <profile default="false" name="Annotation profile for mllib" enabled="true">
-        <sourceOutputDir name="target\generated-sources\annotations" />
-        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
-        <outputRelativeToContentRoot value="true" />
-        <processorPath useClasspath="true" />
-        <module name="mllib" />
-      </profile>
-      <profile default="false" name="Annotation profile for catalyst" enabled="true">
-        <sourceOutputDir name="target\generated-sources\annotations" />
-        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
-        <outputRelativeToContentRoot value="true" />
-        <processorPath useClasspath="true" />
-        <module name="catalyst" />
-      </profile>
-      <profile default="false" name="Annotation profile for examples" enabled="true">
-        <sourceOutputDir name="target\generated-sources\annotations" />
-        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
-        <outputRelativeToContentRoot value="true" />
-        <processorPath useClasspath="true" />
-        <module name="examples" />
-      </profile>
-      <profile default="false" name="Annotation profile for graphx" enabled="true">
-        <sourceOutputDir name="target\generated-sources\annotations" />
-        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
-        <outputRelativeToContentRoot value="true" />
-        <processorPath useClasspath="true" />
-        <module name="graphx" />
-      </profile>
-      <profile default="false" name="Annotation profile for tools" enabled="true">
-        <sourceOutputDir name="target\generated-sources\annotations" />
-        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
-        <outputRelativeToContentRoot value="true" />
-        <processorPath useClasspath="true" />
-        <module name="tools" />
-      </profile>
-      <profile default="false" name="Annotation profile for network-common" enabled="true">
-        <sourceOutputDir name="target\generated-sources\annotations" />
-        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
-        <outputRelativeToContentRoot value="true" />
-        <processorPath useClasspath="true" />
-        <module name="network-common" />
-      </profile>
-      <profile default="false" name="Annotation profile for streaming-mqtt" enabled="true">
-        <sourceOutputDir name="target\generated-sources\annotations" />
-        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
-        <outputRelativeToContentRoot value="true" />
-        <processorPath useClasspath="true" />
-        <module name="streaming-mqtt" />
-      </profile>
-      <profile default="false" name="Annotation profile for streaming-flume" enabled="true">
-        <sourceOutputDir name="target\generated-sources\annotations" />
-        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
-        <outputRelativeToContentRoot value="true" />
-        <processorPath useClasspath="true" />
-        <module name="streaming-flume" />
-      </profile>
-      <profile default="false" name="Annotation profile for repl" enabled="true">
-        <sourceOutputDir name="target\generated-sources\annotations" />
-        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
-        <outputRelativeToContentRoot value="true" />
-        <processorPath useClasspath="true" />
-        <module name="repl" />
-      </profile>
-      <profile default="false" name="Annotation profile for streaming-kafka" enabled="true">
-        <sourceOutputDir name="target\generated-sources\annotations" />
-        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
-        <outputRelativeToContentRoot value="true" />
-        <processorPath useClasspath="true" />
-        <module name="streaming-kafka" />
-      </profile>
-      <profile default="false" name="Annotation profile for streaming-zeromq" enabled="true">
-        <sourceOutputDir name="target\generated-sources\annotations" />
-        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
-        <outputRelativeToContentRoot value="true" />
-        <processorPath useClasspath="true" />
-        <module name="streaming-zeromq" />
-      </profile>
-      <profile default="false" name="Annotation profile for core" enabled="true">
-        <sourceOutputDir name="target\generated-sources\annotations" />
-        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
-        <outputRelativeToContentRoot value="true" />
-        <processorPath useClasspath="true" />
-        <module name="core" />
-      </profile>
-      <profile default="false" name="Annotation profile for network-shuffle" enabled="true">
-        <sourceOutputDir name="target\generated-sources\annotations" />
-        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
-        <outputRelativeToContentRoot value="true" />
-        <processorPath useClasspath="true" />
-        <module name="network-shuffle" />
-      </profile>
-      <profile default="false" name="Annotation profile for streaming-twitter" enabled="true">
-        <sourceOutputDir name="target\generated-sources\annotations" />
-        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
-        <outputRelativeToContentRoot value="true" />
-        <processorPath useClasspath="true" />
-        <module name="streaming-twitter" />
-      </profile>
-      <profile default="false" name="Annotation profile for streaming-flume-sink" enabled="true">
-        <sourceOutputDir name="target\generated-sources\annotations" />
-        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
-        <outputRelativeToContentRoot value="true" />
-        <processorPath useClasspath="true" />
-        <module name="streaming-flume-sink" />
-      </profile>
-      <profile default="false" name="Annotation profile for streaming-kafka-assembly" enabled="true">
-        <sourceOutputDir name="target\generated-sources\annotations" />
-        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
-        <outputRelativeToContentRoot value="true" />
-        <processorPath useClasspath="true" />
-        <module name="streaming-kafka-assembly" />
-      </profile>
-      <profile default="false" name="Annotation profile for bagel" enabled="true">
-        <sourceOutputDir name="target\generated-sources\annotations" />
-        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
-        <outputRelativeToContentRoot value="true" />
-        <processorPath useClasspath="true" />
-        <module name="bagel" />
-      </profile>
-      <profile default="false" name="Annotation profile for streaming" enabled="true">
-        <sourceOutputDir name="target\generated-sources\annotations" />
-        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
-        <outputRelativeToContentRoot value="true" />
-        <processorPath useClasspath="true" />
-        <module name="streaming" />
-      </profile>
-      <profile default="false" name="Annotation profile for spark-unsafe_2.10" enabled="true">
-        <sourceOutputDir name="target\generated-sources\annotations" />
-        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
-        <outputRelativeToContentRoot value="true" />
-        <processorPath useClasspath="true" />
-        <module name="spark-unsafe_2.10" />
+        <module name="spark-hive_2.10" />
       </profile>
       <profile default="false" name="Annotation profile for spark-launcher_2.10" enabled="true">
         <sourceOutputDir name="target\generated-sources\annotations" />
@@ -171,32 +38,165 @@
         <processorPath useClasspath="true" />
         <module name="spark-launcher_2.10" />
       </profile>
+      <profile default="false" name="Annotation profile for spark-examples_2.10" enabled="true">
+        <sourceOutputDir name="target\generated-sources\annotations" />
+        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="true" />
+        <module name="spark-examples_2.10" />
+      </profile>
+      <profile default="false" name="Annotation profile for spark-repl_2.10" enabled="true">
+        <sourceOutputDir name="target\generated-sources\annotations" />
+        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="true" />
+        <module name="spark-repl_2.10" />
+      </profile>
+      <profile default="false" name="Annotation profile for spark-network-shuffle_2.10" enabled="true">
+        <sourceOutputDir name="target\generated-sources\annotations" />
+        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="true" />
+        <module name="spark-network-shuffle_2.10" />
+      </profile>
+      <profile default="false" name="Annotation profile for spark-network-common_2.10" enabled="true">
+        <sourceOutputDir name="target\generated-sources\annotations" />
+        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="true" />
+        <module name="spark-network-common_2.10" />
+      </profile>
+      <profile default="false" name="Annotation profile for spark-unsafe_2.10" enabled="true">
+        <sourceOutputDir name="target\generated-sources\annotations" />
+        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="true" />
+        <module name="spark-unsafe_2.10" />
+      </profile>
+      <profile default="false" name="Annotation profile for spark-streaming_2.10" enabled="true">
+        <sourceOutputDir name="target\generated-sources\annotations" />
+        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="true" />
+        <module name="spark-streaming_2.10" />
+      </profile>
+      <profile default="false" name="Annotation profile for spark-bagel_2.10" enabled="true">
+        <sourceOutputDir name="target\generated-sources\annotations" />
+        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="true" />
+        <module name="spark-bagel_2.10" />
+      </profile>
+      <profile default="false" name="Annotation profile for spark-tools_2.10" enabled="true">
+        <sourceOutputDir name="target\generated-sources\annotations" />
+        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="true" />
+        <module name="spark-tools_2.10" />
+      </profile>
+      <profile default="false" name="Annotation profile for spark-streaming-kafka-assembly_2.10" enabled="true">
+        <sourceOutputDir name="target\generated-sources\annotations" />
+        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="true" />
+        <module name="spark-streaming-kafka-assembly_2.10" />
+      </profile>
+      <profile default="false" name="Annotation profile for spark-streaming-kafka_2.10" enabled="true">
+        <sourceOutputDir name="target\generated-sources\annotations" />
+        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="true" />
+        <module name="spark-streaming-kafka_2.10" />
+      </profile>
+      <profile default="false" name="Annotation profile for spark-streaming-mqtt_2.10" enabled="true">
+        <sourceOutputDir name="target\generated-sources\annotations" />
+        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="true" />
+        <module name="spark-streaming-mqtt_2.10" />
+      </profile>
+      <profile default="false" name="Annotation profile for spark-streaming-flume-sink_2.10" enabled="true">
+        <sourceOutputDir name="target\generated-sources\annotations" />
+        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="true" />
+        <module name="spark-streaming-flume-sink_2.10" />
+      </profile>
+      <profile default="false" name="Annotation profile for spark-streaming-flume_2.10" enabled="true">
+        <sourceOutputDir name="target\generated-sources\annotations" />
+        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="true" />
+        <module name="spark-streaming-flume_2.10" />
+      </profile>
+      <profile default="false" name="Annotation profile for spark-streaming-zeromq_2.10" enabled="true">
+        <sourceOutputDir name="target\generated-sources\annotations" />
+        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="true" />
+        <module name="spark-streaming-zeromq_2.10" />
+      </profile>
+      <profile default="false" name="Annotation profile for spark-streaming-twitter_2.10" enabled="true">
+        <sourceOutputDir name="target\generated-sources\annotations" />
+        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="true" />
+        <module name="spark-streaming-twitter_2.10" />
+      </profile>
+      <profile default="false" name="Annotation profile for spark-catalyst_2.10" enabled="true">
+        <sourceOutputDir name="target\generated-sources\annotations" />
+        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="true" />
+        <module name="spark-catalyst_2.10" />
+      </profile>
+      <profile default="false" name="Annotation profile for spark-sql_2.10" enabled="true">
+        <sourceOutputDir name="target\generated-sources\annotations" />
+        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="true" />
+        <module name="spark-sql_2.10" />
+      </profile>
+      <profile default="false" name="Annotation profile for spark-mllib_2.10" enabled="true">
+        <sourceOutputDir name="target\generated-sources\annotations" />
+        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="true" />
+        <module name="spark-mllib_2.10" />
+      </profile>
+      <profile default="false" name="Annotation profile for spark-graphx_2.10" enabled="true">
+        <sourceOutputDir name="target\generated-sources\annotations" />
+        <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="true" />
+        <module name="spark-graphx_2.10" />
+      </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
-      <module name="assembly" target="1.5" />
-      <module name="bagel" target="1.6" />
-      <module name="catalyst" target="1.6" />
-      <module name="core" target="1.6" />
-      <module name="examples" target="1.6" />
-      <module name="graphx" target="1.6" />
-      <module name="hive" target="1.6" />
-      <module name="mllib" target="1.6" />
-      <module name="network-common" target="1.6" />
-      <module name="network-shuffle" target="1.6" />
-      <module name="repl" target="1.6" />
-      <module name="spark" target="1.5" />
+      <module name="spark-assembly_2.10" target="1.5" />
+      <module name="spark-bagel_2.10" target="1.6" />
+      <module name="spark-catalyst_2.10" target="1.6" />
+      <module name="spark-core_2.10" target="1.6" />
+      <module name="spark-examples_2.10" target="1.6" />
+      <module name="spark-graphx_2.10" target="1.6" />
+      <module name="spark-hive_2.10" target="1.6" />
       <module name="spark-launcher_2.10" target="1.6" />
+      <module name="spark-mllib_2.10" target="1.6" />
+      <module name="spark-network-common_2.10" target="1.6" />
+      <module name="spark-network-shuffle_2.10" target="1.6" />
+      <module name="spark-parent_2.10" target="1.5" />
+      <module name="spark-repl_2.10" target="1.6" />
+      <module name="spark-sql_2.10" target="1.6" />
+      <module name="spark-streaming-flume-sink_2.10" target="1.6" />
+      <module name="spark-streaming-flume_2.10" target="1.6" />
+      <module name="spark-streaming-kafka-assembly_2.10" target="1.6" />
+      <module name="spark-streaming-kafka_2.10" target="1.6" />
+      <module name="spark-streaming-mqtt_2.10" target="1.6" />
+      <module name="spark-streaming-twitter_2.10" target="1.6" />
+      <module name="spark-streaming-zeromq_2.10" target="1.6" />
+      <module name="spark-streaming_2.10" target="1.6" />
+      <module name="spark-tools_2.10" target="1.6" />
       <module name="spark-unsafe_2.10" target="1.6" />
-      <module name="sql" target="1.6" />
-      <module name="streaming" target="1.6" />
-      <module name="streaming-flume" target="1.6" />
-      <module name="streaming-flume-sink" target="1.6" />
-      <module name="streaming-kafka" target="1.6" />
-      <module name="streaming-kafka-assembly" target="1.6" />
-      <module name="streaming-mqtt" target="1.6" />
-      <module name="streaming-twitter" target="1.6" />
-      <module name="streaming-zeromq" target="1.6" />
-      <module name="tools" target="1.6" />
     </bytecodeTargetLevel>
   </component>
 </project>

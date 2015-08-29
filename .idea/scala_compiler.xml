@@ -1,45 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ScalaCompilerConfiguration">
-    <option name="deprecationWarnings" value="true" />
-    <option name="uncheckedWarnings" value="true" />
-    <option name="featureWarnings" value="true" />
-    <parameters>
-      <parameter value="-P:genjavadoc:out=E:\我的文档\Desktop\spark-1.3.1\target\java" />
-      <parameter value="-P:genjavadoc:out=E:\我的文档\Desktop\spark-1.3.1\assembly\target\java" />
-      <parameter value="-P:genjavadoc:out=E:\我的文档\Desktop\spark-1.3.1\bagel\target\java" />
-      <parameter value="-P:genjavadoc:out=E:\我的文档\Desktop\spark-1.3.1\core\target\java" />
-      <parameter value="-P:genjavadoc:out=E:\我的文档\Desktop\spark-1.3.1\examples\target\java" />
-      <parameter value="-P:genjavadoc:out=E:\我的文档\Desktop\spark-1.3.1\external\flume\target\java" />
-      <parameter value="-P:genjavadoc:out=E:\我的文档\Desktop\spark-1.3.1\external\flume-sink\target\java" />
-      <parameter value="-P:genjavadoc:out=E:\我的文档\Desktop\spark-1.3.1\external\kafka\target\java" />
-      <parameter value="-P:genjavadoc:out=E:\我的文档\Desktop\spark-1.3.1\external\kafka-assembly\target\java" />
-      <parameter value="-P:genjavadoc:out=E:\我的文档\Desktop\spark-1.3.1\external\mqtt\target\java" />
-      <parameter value="-P:genjavadoc:out=E:\我的文档\Desktop\spark-1.3.1\external\twitter\target\java" />
-      <parameter value="-P:genjavadoc:out=E:\我的文档\Desktop\spark-1.3.1\external\zeromq\target\java" />
-      <parameter value="-P:genjavadoc:out=E:\我的文档\Desktop\spark-1.3.1\graphx\target\java" />
-      <parameter value="-P:genjavadoc:out=E:\我的文档\Desktop\spark-1.3.1\mllib\target\java" />
-      <parameter value="-P:genjavadoc:out=E:\我的文档\Desktop\spark-1.3.1\network\common\target\java" />
-      <parameter value="-P:genjavadoc:out=E:\我的文档\Desktop\spark-1.3.1\network\shuffle\target\java" />
-      <parameter value="-P:genjavadoc:out=E:\我的文档\Desktop\spark-1.3.1\repl\target\java" />
-      <parameter value="-P:genjavadoc:out=E:\我的文档\Desktop\spark-1.3.1\sql\catalyst\target\java" />
-      <parameter value="-P:genjavadoc:out=E:\我的文档\Desktop\spark-1.3.1\sql\hive\target\java" />
-      <parameter value="-P:genjavadoc:out=E:\我的文档\Desktop\spark-1.3.1\streaming\target\java" />
-      <parameter value="-P:genjavadoc:out=E:\我的文档\Desktop\spark-1.3.1\tools\target\java" />
-      <parameter value="-P:genjavadoc:out=E:\我的文档\Desktop\spark-1.3.1\sql\core\target\java" />
-    </parameters>
-    <plugins>
-      <plugin path="E:\我的文档\Desktop\spark-1.3.1\lib_managed\jars\genjavadoc-plugin_2.10.4-0.8.jar" />
-      <plugin path="E:\我的文档\Desktop\spark-1.3.1\lib_managed\jars\paradise_2.10.4-2.0.1.jar" />
-    </plugins>
-    <profile name="Maven 1" modules="mllib,network-shuffle,streaming-twitter,assembly,streaming-flume-sink,streaming-mqtt,streaming-kafka-assembly,examples,spark-launcher_2.10,streaming,core,network-common,streaming-zeromq,spark-unsafe_2.10,spark,tools,streaming-kafka,repl,hive,bagel,catalyst,streaming-flume,sql,graphx">
+    <profile name="Maven 1" modules="spark-streaming-flume-sink_2.10,spark-repl_2.10,spark-sql_2.10,spark-streaming-kafka_2.10,spark-assembly_2.10,spark-mllib_2.10,spark-parent_2.10,spark-streaming-flume_2.10,spark-streaming-mqtt_2.10,spark-core_2.10,spark-streaming-twitter_2.10,spark-bagel_2.10,spark-network-shuffle_2.10,spark-catalyst_2.10,spark-streaming-kafka-assembly_2.10,spark-examples_2.10,spark-streaming-zeromq_2.10,spark-unsafe_2.10,spark-graphx_2.10,spark-network-common_2.10,spark-hive_2.10,spark-streaming_2.10,spark-launcher_2.10,spark-tools_2.10">
       <option name="deprecationWarnings" value="true" />
       <option name="uncheckedWarnings" value="true" />
       <option name="featureWarnings" value="true" />
       <plugins>
-        <plugin path="C:\Users\Feiyu\.m2\repository\org\scalamacros\paradise_2.10.4\2.0.1\paradise_2.10.4-2.0.1.jar" />
+        <plugin path="E:\.m2\repository\org\scalamacros\paradise_2.10.4\2.0.1\paradise_2.10.4-2.0.1.jar" />
       </plugins>
     </profile>
-    <profile name="SBT 2" modules="mqtt,project" />
   </component>
 </project>

@@ -1,5 +1,6 @@
 # A Spark Worker will be started on each of the machines listed below.
-spark2
-#spark3
-spark4
-spark5
+localhost
+#spark2
+##spark3
+#spark4
+#spark5

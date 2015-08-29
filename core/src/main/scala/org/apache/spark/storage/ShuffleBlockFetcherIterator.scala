@@ -157,8 +157,8 @@ final class ShuffleBlockFetcherIterator(
                 address, SkewTuneBlockStatus.REMOTE_FETCH_WAITING, Option(newRequest), None))
             })
             worker.blocks ++= tmpInfos
-            //8.23 向Master报告block Status
-            worker.reportBlockStatuses(tmpInfos.map(info => (info._1, 0x00.asInstanceOf[Byte])))
+            //8.23 向Master报告block Status,block所属的taskid变化
+            worker.reportBlockStatuses(tmpInfos.map(info => (info._1, 0x00.asInstanceOf[Byte])),Some(worker.taskId))
           }
         }
         if (curBlocks.nonEmpty) {
@@ -167,11 +167,11 @@ final class ShuffleBlockFetcherIterator(
           //8.22 SkewTune NewAdd，reportBlockStatuses
           val tmpInfos: Seq[(BlockId, SkewTuneBlockInfo)] = curBlocks.map(blockInfoInCur => {
             (blockInfoInCur._1, SkewTuneBlockInfo(blockInfoInCur._1, blockInfoInCur._2,
-              address, SkewTuneBlockStatus.REMOTE_FETCH_WAITING, Option(newRequest), None))
+              address, SkewTuneBlockStatus.REMOTE_FETCH_WAITING, Some(newRequest), None))
           })
           worker.blocks ++= tmpInfos
           //8.23 向Master报告block Status，只在add时需要报告，remove时不需要
-          worker.reportBlockStatuses(tmpInfos.map(info => (info._1, 0x00.asInstanceOf[Byte])), Option(worker.taskId))
+          worker.reportBlockStatuses(tmpInfos.map(info => (info._1, 0x00.asInstanceOf[Byte])), Some(worker.taskId))
         }
       }
       fetchRequests ++= remoteRequests
@@ -185,12 +185,11 @@ final class ShuffleBlockFetcherIterator(
     this.synchronized {
       for (blockToRemove <- blocksToRemove) {
         for (request <- fetchRequests if request.address == blockToRemove._1) {
-          val tmpBlocksLeft = new ArrayBuffer[(BlockId, Long)]
+          val tmpBlocksLeft = new ArrayBuffer[(BlockId, Long)] ++= request.blocks
           val tmpBlocksRemove = new ArrayBuffer[(BlockId, Long)]
-          tmpBlocksLeft ++= request.blocks
           for ((blockId, size) <- request.blocks if blockToRemove._2.contains(blockId)
             && worker.blocks.get(blockId).nonEmpty
-            && worker.blocks.get(blockId).get.blockState == SkewTuneBlockStatus.REMOTE_FETCH_WAITING) {
+            && worker.blocks(blockId).blockState == SkewTuneBlockStatus.REMOTE_FETCH_WAITING) {
             tmpBlocksLeft -= ((blockId, size))
             tmpBlocksRemove += ((blockId, size))
           }
@@ -228,31 +227,30 @@ final class ShuffleBlockFetcherIterator(
       numBlocksToFetch += totalBlocksToAdd
     }
     //8.23 向Master报告block Status，只在add时需要报告，remove时不需要
-    worker.reportBlockStatuses(updateCache, Option(worker.taskId))
+    worker.reportBlockStatuses(updateCache, Some(worker.taskId))
     logInfo(s"ShuffleBlockFetchIterator on BlockManager $blockManager。addFetchResults ： ${updateCache.map(_._1)}")
   }
 
   //8.21 传入参数改为匹配BLockId，检查block状态必须为fetched(local and remote)
   def removeFetchResults(blocksToRemove: Seq[BlockId]): Seq[(SkewTuneBlockInfo, SuccessFetchResult)] = {
     val toDelete = new ArrayBuffer[(SkewTuneBlockInfo, SuccessFetchResult)]
-    val tmpResultBlocksMap = new mutable.HashMap[BlockId, SuccessFetchResult]()
-    tmpResultBlocksMap ++= results.toArray.filter(_.isInstanceOf[SuccessFetchResult])
+    val tmpResultBlocksMap = new mutable.HashMap[BlockId, SuccessFetchResult]() ++= results.toArray.filter(_.isInstanceOf[SuccessFetchResult])
       .asInstanceOf[Array[SuccessFetchResult]].map(res => (res.blockId, res))
     this.synchronized {
       blocksToRemove.foreach(blockId => {
         if (tmpResultBlocksMap.contains(blockId) && worker.blocks.contains(blockId)
-          && (worker.blocks.get(blockId).get.blockState == SkewTuneBlockStatus.LOCAL_FETCHED
-          || worker.blocks.get(blockId).get.blockState == SkewTuneBlockStatus.REMOTE_FETCHED)) {
-          val fetchResult = tmpResultBlocksMap.get(blockId).get
+          && (worker.blocks(blockId).blockState == SkewTuneBlockStatus.LOCAL_FETCHED
+          || worker.blocks(blockId).blockState == SkewTuneBlockStatus.REMOTE_FETCHED)) {
+          val fetchResult = tmpResultBlocksMap(blockId)
           //8.22 SkewTune NewAdd
-          val skewTuneBlockInfo = worker.blocks.get(blockId).get
+          val skewTuneBlockInfo = worker.blocks(blockId)
           results.remove(fetchResult)
           toDelete += ((skewTuneBlockInfo, fetchResult))
         }
       })
       numBlocksToFetch -= toDelete.length
     }
-    logInfo(s"ShuffleBlockFetchIterator on BlockManager $blockManager。removeFetchResults ：$blocksToRemove")
+    logInfo(s"ShuffleBlockFetchIterator on BlockManager $blockManager。removeFetchResults ：$toDelete")
     toDelete
   }
 
@@ -302,10 +300,10 @@ final class ShuffleBlockFetcherIterator(
             results.put(new SuccessFetchResult(BlockId(blockId), sizeMap(blockId), buf))
 
             //8.21 SkewTune NewAdd 远程BLocks得到结果后
-            val skewTuneBlockInfo = worker.blocks.get(BlockId(blockId)).get
+            val skewTuneBlockInfo = worker.blocks(BlockId(blockId))
             skewTuneBlockInfo.blockState = SkewTuneBlockStatus.REMOTE_FETCHED
-            skewTuneBlockInfo.inWhichFetch = None
-            skewTuneBlockInfo.inWhichResult = Option(results.peek().asInstanceOf[SuccessFetchResult])
+            /*skewTuneBlockInfo.inWhichFetch = None
+            skewTuneBlockInfo.inWhichResult = Some(results.peek().asInstanceOf[SuccessFetchResult])*/
             //8.23 向Master报告block已被fetched
             if (isTaskRegistered)
               worker.reportBlockStatuses(Seq((skewTuneBlockInfo.blockId, SkewTuneBlockStatus.REMOTE_FETCHED)))
@@ -325,7 +323,7 @@ final class ShuffleBlockFetcherIterator(
       }
     )
     //8.21 SkewTune NewAdd 远程BLocks 放入等待发出Fetch请求后
-    req.blocks.foreach(block => worker.blocks.get(block._1).get.blockState = SkewTuneBlockStatus.REMOTE_FETCHING)
+    req.blocks.foreach(block => worker.blocks(block._1).blockState = SkewTuneBlockStatus.REMOTE_FETCHING)
     //8.23 向Master报告block status 更新
     val tmp: Seq[(BlockId, Byte)] = req.blocks.map(block => (block._1, SkewTuneBlockStatus.REMOTE_FETCHING))
     if (isTaskRegistered)
@@ -429,7 +427,7 @@ final class ShuffleBlockFetcherIterator(
       request.blocks.map(block => {
         (block._1, SkewTuneBlockInfo(block._1, block._2,
           request.address, SkewTuneBlockStatus.REMOTE_FETCH_WAITING,
-          Option(request), None))
+          Some(request), None))
       })
     })
 
@@ -454,7 +452,7 @@ final class ShuffleBlockFetcherIterator(
       .asInstanceOf[Array[SuccessFetchResult]].map(result => {
       (result.blockId, SkewTuneBlockInfo(result.blockId, result.size,
         blockManager.blockManagerId, SkewTuneBlockStatus.LOCAL_FETCHED,
-        None, Option(result)))
+        None, Some(result)))
     })
     //8.23 SkewTune NewAdd 向Master报告TaskStart，把task所属的blocks注册上去
     worker.registerNewTask(worker.blocks.values.toSeq)
@@ -504,11 +502,13 @@ final class ShuffleBlockFetcherIterator(
         val blockInfo = context.asInstanceOf[TaskContextImpl].skewTuneWorker.
           blocks.get(blockId).get
         blockInfo.blockState = SkewTuneBlockStatus.USED
-        blockInfo.inWhichFetch = None
-        blockInfo.inWhichResult = Option(result.asInstanceOf[SuccessFetchResult])
-        //8.23 向Master报告block已被使用
-        worker.reportBlockStatuses(Seq((blockInfo.blockId, SkewTuneBlockStatus.USED)))
-
+        /*blockInfo.inWhichFetch = None
+        blockInfo.inWhichResult = Option(result.asInstanceOf[SuccessFetchResult])*/
+        //8.23 向Master报告block已被使用，如果是最后一个block result了，报告task已完成
+        if(numBlocksProcessed < numBlocksToFetch)
+          worker.reportBlockStatuses(Seq((blockInfo.blockId, SkewTuneBlockStatus.USED)))
+        else
+          worker.reportTaskFinished()
         // There is a chance that createInputStream can fail (e.g. fetching a local file that does
         // not exist, SPARK-4085). In that case, we should propagate the right exception so
         // the scheduler gets a FetchFailedException.
