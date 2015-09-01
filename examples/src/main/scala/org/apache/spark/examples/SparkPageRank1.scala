@@ -17,7 +17,6 @@
 
 package org.apache.spark.examples
 
-import org.apache.spark.SparkContext._
 import org.apache.spark.{SparkConf, SparkContext}
 
 /**
@@ -43,33 +42,43 @@ object SparkPageRank1 {
   }
 
   def main(args: Array[String]) {
-    if (args.length < 1) {
-      System.err.println("Usage: SparkPageRank <file> <iter>")
+    if (args.length < 2) {
+      System.err.println("Usage: SparkPageRank <file> <iter> <partitionNumber> <SleepTimeSeconds>")
       System.exit(1)
     }
 
     showWarning()
 
-    val sparkConf = new SparkConf().setAppName("PageRank")
+    val partitionNumber = args(2).toInt
     val iters = if (args.length > 0) args(1).toInt else 10
+    val sparkConf = new SparkConf().setAppName(s"PageRank(Partition$partitionNumber,Iterator$iters)")
+      .set("spark.executor.extraJavaOptions", "-Xdebug -Xrunjdwp:transport=dt_socket,address=8003,server=y,suspend=y")
+    println("sleep begin.")
+    val sleepTime = if (args.length > 3) args(3).toInt else 0 //val rePartition = if (args.length > 4) args(4).toBoolean else false
     val ctx = new SparkContext(sparkConf)
-    val lines = ctx.textFile(args(0), 1)
+    if (sleepTime > 0) {
+      println(s"Waiting For ${sleepTime * 1000} seconds")
+      Thread.sleep(sleepTime * 1000)
+    }
+    //8.30 textFile(路径,minPartitions),原先为1。
+    //8.30 RDD的getPartitions都是调用上级RDD的partitions，所以在HadoopRDD中指定partition数量，在inputSplit中按照数量切开
+    val lines = ctx.textFile(args(0), partitionNumber)
     val links = lines.map{ s =>
       val parts = s.split("\\s+")
       (parts(0), parts(1))
-    }.distinct().groupByKey().cache()
+    }.distinct(partitionNumber).groupByKey(partitionNumber).cache()
     var ranks = links.mapValues(v => 1.0)
 
     for (i <- 1 to iters) {
-      val contribs = links.join(ranks).values.flatMap{ case (urls, rank) =>
+      val contribs = links.join(ranks, partitionNumber).values.flatMap { case (urls, rank) =>
         val size = urls.size
         urls.map(url => (url, rank / size))
       }
-      ranks = contribs.reduceByKey(_ + _).mapValues(0.15 + 0.85 * _)
+      ranks = contribs.reduceByKey(_ + _, partitionNumber).mapValues(0.15 + 0.85 * _)
     }
 
     val output = ranks.collect()
-    output.foreach(tup => println(tup._1 + " has rank: " + tup._2 + "."))
+    output.foreach(tup => print(tup._1 + " has rank: " + tup._2 + ".\t"))
 
     ctx.stop()
   }

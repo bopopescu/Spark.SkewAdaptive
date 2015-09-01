@@ -624,6 +624,7 @@ object SparkSubmit {
     }
 
     for ((key, value) <- sysProps) {
+      //8.30 从命令行获得的系统设置参数，现在写入
       System.setProperty(key, value)
     }
 
@@ -646,7 +647,7 @@ object SparkSubmit {
       printWarning("Subclasses of scala.App may not work correctly. Use a main() method instead.")
     }
 
-    val mainMethod = mainClass.getMethod("main", new Array[String](0).getClass)
+    val mainMethod = mainClass.getMethod("main", new Array[String](0).getClass) //8.30 通过反射获得main()
     if (!Modifier.isStatic(mainMethod.getModifiers)) {
       throw new IllegalStateException("The main method in the given main class must be static")
     }

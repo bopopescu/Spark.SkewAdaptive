@@ -148,15 +148,22 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         val hasSkewTuneTaskRunByExecutorId = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskId)).hasSkewTuneTaskRunByExecutorId
         //8.24 判断SkewTune重新分配blocks的触发条件:该taskset中正在运行的executor上非第一个task注册上来时调度。
         // 如果是taakset的最后一个task需要额外的调度
+        //8.30 bug: 所有skewtuneblockInfo中的size都为0，但是hadoopRDD中确实split了16个，也看到了16个offset
         if (hasSkewTuneTaskRunByExecutorId.contains(executorId) && hasSkewTuneTaskRunByExecutorId(executorId)) {
           logInfo(s"Master on taskSetManager ${master.taskSetManager.name}: Start SkewTune Split")
           val isLastTask = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskId)).allPendingTasks.isEmpty
-          val (fetchCommands, resultCommands) = master.computerAndSplit(isLastTask)
-          for (command <- fetchCommands if scheduler.taskIdToExecutorId.contains(command.taskId)) {
-            executorDataMap(scheduler.taskIdToExecutorId(command.taskId)).executorEndpoint.send(command)
-          }
-          for (command <- resultCommands if scheduler.taskIdToExecutorId.contains(command.fromTaskId)) {
-            executorDataMap(scheduler.taskIdToExecutorId(command.fromTaskId)).executorEndpoint.send(command)
+          val commandsOption = master.computerAndSplit(isLastTask)
+          commandsOption match {
+            case Some((fetchCommands, resultCommands)) =>
+              for (command <- fetchCommands if scheduler.taskIdToExecutorId.contains(command.taskId)) {
+                executorDataMap(scheduler.taskIdToExecutorId(command.taskId)).executorEndpoint.send(command)
+              }
+              for (command <- resultCommands if scheduler.taskIdToExecutorId.contains(command.fromTaskId)) {
+                executorDataMap(scheduler.taskIdToExecutorId(command.fromTaskId)).executorEndpoint.send(command)
+              }
+            case _ =>
+              logInfo(s"Master on taskSetManager ${master.taskSetManager.name}: Terminate because ActiveTasks.length < 3")
+
           }
         }
         hasSkewTuneTaskRunByExecutorId(executorId) = true
