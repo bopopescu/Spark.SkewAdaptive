@@ -36,7 +36,7 @@ private[spark] object CoarseGrainedClusterMessages {
   case class KillTask(taskId: Long, executor: String, interruptThread: Boolean)
     extends CoarseGrainedClusterMessage
 
-  //8.24 SkewTune NewAdd Driver到Executor的消息
+  //8.24 SkewTuneAdd Driver到Executor的消息
   case class RemoveFetchCommand(nextExecutorId: String, nextTaskId: Long, taskId: Long, allBlocks: Seq[(BlockManagerId, Seq[BlockId])])
     extends CoarseGrainedClusterMessage
 
@@ -47,7 +47,7 @@ private[spark] object CoarseGrainedClusterMessages {
     extends CoarseGrainedClusterMessage
 
   //End
-  //8.24 SkewTune NewAdd Executor到Driver的消息
+  //8.24 SkewTuneAdd Executor到Driver的消息
   case class TransferRemovedFetch(nextExecutorId: String, nextTaskId: Long, returnSeq: Seq[(BlockManagerId, Seq[(BlockId, Long)])])
     extends CoarseGrainedClusterMessage
 
@@ -81,6 +81,11 @@ private[spark] object CoarseGrainedClusterMessages {
       new ReportTaskFinished(taskID)
     }
   }*/
+  //9.5
+  case class ReportTaskComputeSpeed(taskId: Long, executor: String, speed: Float) extends CoarseGrainedClusterMessage
+
+  case class ReportBlockDownloadSpeed(fromExecutor: String, toExecutor: String, speed: Float)
+    extends CoarseGrainedClusterMessage
 
   //End
 

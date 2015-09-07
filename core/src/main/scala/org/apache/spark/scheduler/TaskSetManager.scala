@@ -22,6 +22,7 @@ import java.nio.ByteBuffer
 import java.util.Arrays
 import java.util.concurrent.ConcurrentLinkedQueue
 
+import org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend
 import org.apache.spark.storage.SkewTuneMaster
 
 import scala.collection.mutable
@@ -182,7 +183,7 @@ private[spark] class TaskSetManager(
   var emittedTaskSizeWarning = false
 
   //8.26 一个taskset一个master，如果全局一个master，split时会串到其他stage的task中去
-  val master = new SkewTuneMaster(this)
+  val master = new SkewTuneMaster(this, sched.backend.asInstanceOf[CoarseGrainedSchedulerBackend].networkSpeed)
   //sbt：error:values cannot be volatile。因为volatile表示便以其不能确定岂会发生变化，与val矛盾
   val hasSkewTuneTaskRunByExecutorId = new mutable.HashMap[String, Boolean]
 

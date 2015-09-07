@@ -26,6 +26,7 @@ import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages._
 import org.apache.spark.util.{AkkaUtils, SerializableBuffer, ThreadUtils, Utils}
 import org.apache.spark.{ExecutorAllocationClient, Logging, SparkEnv, SparkException, TaskState}
 
+import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet}
 
 /**
@@ -38,8 +39,7 @@ import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet}
  */
 private[spark]
 class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: RpcEnv)
-  extends ExecutorAllocationClient with SchedulerBackend with Logging
-{
+  extends ExecutorAllocationClient with SchedulerBackend with Logging {
   // Use an atomic variable to track total number of cores in the cluster for simplicity and speed
   var totalCoreCount = new AtomicInteger(0)
   // Total number of executors that are currently registered
@@ -66,10 +66,13 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
   // Executors we have requested the cluster manager to kill that have not died yet
   private val executorsPendingToRemove = new HashSet[String]
 
-  //8.24 SkewTune NewAdd : hasSkewTuneTaskRunByExecutorId 记录executor是否运行过task
+  //8.24 SkewTuneAdd : hasSkewTuneTaskRunByExecutorId 记录executor是否运行过task
   /*val master = new SkewTuneMaster*/
   //sbt：error:values cannot be volatile。因为volatile表示便以其不能确定岂会发生变化，与val矛盾
   /*val hasSkewTuneTaskRunByExecutorId = new mutable.HashMap[String, Boolean]*/
+
+  //9.5 SkewTuneAdd : 记录网速（executorA -> executorB) 每个block下载完成报告一次
+  val networkSpeed = new mutable.HashMap[(String, String), Float]()
 
   class DriverEndpoint(override val rpcEnv: RpcEnv, sparkProperties: Seq[(String, String)])
     extends ThreadSafeRpcEndpoint with Logging {
@@ -121,7 +124,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
             logWarning(s"Attempted to kill task $taskId for unknown executor $executorId.")
         }
 
-      //8.24 SkewTune NewAdd : Executor到Master的消息处理
+      //8.24 SkewTuneAdd : Executor到Master的消息处理
       case TransferRemovedFetch(nextExecutorId, nextTaskId, returnSeq) =>
         executorDataMap.get(nextExecutorId) match {
           case Some(executorInfo) =>
@@ -167,6 +170,17 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           }
         }
         hasSkewTuneTaskRunByExecutorId(executorId) = true
+
+      //9.5 SkewTuneAdd
+      case ReportTaskComputeSpeed(taskId, executorId, speed) =>
+        logInfo(s"Master : Received Command ReportTaskComputeSpeed for task $taskId on Executor $executorId with speed $speed byte/ms")
+        val master = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskId)).master
+        master.reportTaskComputerSpeed(taskId, executorId, speed)
+
+      case ReportBlockDownloadSpeed(fromExecutor, toExecutor, speed) =>
+        logInfo(s"Master : Received Command ReportBlockDownloadSpeed from Executor $fromExecutor to Executor $toExecutor with speed $speed byte/ms")
+        val lastSpeed = networkSpeed.getOrElseUpdate((fromExecutor, toExecutor), speed)
+        networkSpeed += (((fromExecutor, toExecutor), (lastSpeed + speed) / 2))
     }
 
     override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
@@ -210,8 +224,8 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
       case RemoveExecutor(executorId, reason) =>
         removeExecutor(executorId, reason)
         context.reply(true)
-        //8.26 SkewTune NewAdd
-        for(taskset <- scheduler.activeTaskSets.values){
+        //8.26 SkewTuneAdd
+        for (taskset <- scheduler.activeTaskSets.values) {
           taskset.hasSkewTuneTaskRunByExecutorId.remove(executorId)
         }
 
@@ -386,7 +400,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     if (numAdditionalExecutors < 0) {
       throw new IllegalArgumentException(
         "Attempted to request a negative number of additional executor(s) " +
-        s"$numAdditionalExecutors from the cluster manager. Please specify a positive number!")
+          s"$numAdditionalExecutors from the cluster manager. Please specify a positive number!")
     }
     logInfo(s"Requesting $numAdditionalExecutors additional executor(s) from the cluster manager")
     logDebug(s"Number of pending executors is now $numPendingExecutors")

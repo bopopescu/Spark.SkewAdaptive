@@ -114,7 +114,7 @@ private[spark] class Executor(
   // Executor for the heartbeat task.
   private val heartbeater = ThreadUtils.newDaemonSingleThreadScheduledExecutor("driver-heartbeater")
 
-  //8.24 SkewTune NewAdd :　Map taskId -> worker
+  //8.24 SkewTuneAdd :　Map taskId -> worker
   val skewTuneWorkerByTaskId = new mutable.HashMap[Long, SkewTuneWorker]()
   private val executorInstance: Executor = this
 
@@ -203,7 +203,7 @@ private[spark] class Executor(
         task = ser.deserialize[Task[Any]](taskBytes, Thread.currentThread.getContextClassLoader)
         task.setTaskMemoryManager(taskMemoryManager)
 
-        /*//8.24 SkewTune NewAdd : Executor保存一份方便查找，只有task在实际被执行时才真正添加到Map中
+        /*//8.24 SkewTuneAdd : Executor保存一份方便查找，只有task在实际被执行时才真正添加到Map中
         //8.27 error : null point ,因为taskContextImpl.skewTuneWorker在BlockStoreShuffleFetcher才被赋值
         //8.27 移到task = ser.  下方，否则task也为null
         //8.27 task.run中才生成了taskContext，当前context为null
@@ -228,7 +228,7 @@ private[spark] class Executor(
         val value = try {
           task.run(taskAttemptId = taskId, attemptNumber = attemptNumber,
             executorId = executorId, skewTuneBackend = execBackend.asInstanceOf[SkewTuneBackend],
-            executorInstance = executorInstance) //8.19 : SkewTune NewAdd
+            executorInstance = executorInstance) //8.19 : SkewTuneAdd
         } finally {
           // Note: this memory freeing logic is duplicated in DAGScheduler.runLocallyWithinThread;
           // when changing this, make sure to update both copies.
@@ -290,6 +290,13 @@ private[spark] class Executor(
           }
         }
 
+        //9.1 SkewTuneAdd : 报告executor计算tasket中的task时的计算速度
+        //9.5 SkewTuneAdd : 必须放在statusUpdate前面，否则Driver端可能把相应的taskset和master删除了导致空指针
+        skewTuneWorkerByTaskId(taskId).reportTaskComputeSpeed(
+          task.context.skewTuneWorker.blocks.map(_._2.blockSize).sum.toFloat / (task.metrics.get.executorRunTime
+            - task.metrics.get.shuffleReadMetrics.get.fetchWaitTime
+            - task.metrics.get.shuffleWriteMetrics.get.shuffleWriteTime))
+
         execBackend.statusUpdate(taskId, TaskState.FINISHED, serializedResult)
 
       } catch {
@@ -336,11 +343,12 @@ private[spark] class Executor(
         Accumulators.clear()
         runningTasks.remove(taskId)
 
-        //8.24 SkewTune NewAdd : Task Runner内部类 1.向Master报告Task Finished。 2.在Executor中的Map中删除引用
+        //8.24 SkewTuneAdd : Task Runner内部类 1.向Master报告Task Finished。 2.在Executor中的Map中删除引用
         //8.28 不能再这儿reportTaskFinished，因为有可能是非ShuffleMapTask，非ShuffleRDD，没有用到ShuffleBlockIterator，
         // 就没有registerNewTask，所以找不到task，把taskFinish移动到ShuffleBlockIterator中
         /*execBackend.asInstanceOf[SkewTuneBackend].reportTaskFinished(task.context.skewTuneWorker.taskId)*/
         skewTuneWorkerByTaskId -= task.context.skewTuneWorker.taskId
+
       }
     }
   }

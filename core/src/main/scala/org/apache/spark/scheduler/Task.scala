@@ -63,14 +63,14 @@ private[spark] abstract class Task[T](val stageId: Int, var partitionId: Int) ex
       taskMemoryManager = taskMemoryManager,
       runningLocally = false,
       executorId = executorId, //sbt: error: parameter is already specified at parameter position 7 调用构造函数时一种是传入参数名=参数值，一种是直接传入参数值。注意方式的统一
-      skewTuneBackend = skewTuneBackend,//8.19 SkewTune NewAdd
+      skewTuneBackend = skewTuneBackend, //8.19 SkewTuneAdd
       isShuffleMapTask = this.isInstanceOf[ShuffleMapTask]) //8.28 判断是否是sshufleMapTask，是才有worker
     TaskContext.setTaskContext(context)
     context.taskMetrics.setHostname(Utils.localHostName())
     taskThread = Thread.currentThread()
 
-    //8.24 SkewTune NewAdd : Executor保存一份方便查找，只有task在实际被执行时才真正添加到Map中
-    //8.28 SkewTune NewAdd : 放到这儿才不为null
+    //8.24 SkewTuneAdd : Executor保存一份方便查找，只有task在实际被执行时才真正添加到Map中
+    //8.28 SkewTuneAdd : 放到这儿才不为null
     /*if(context.isShuffleMapTask)*/
     executorInstance.skewTuneWorkerByTaskId += ((context.skewTuneWorker.taskId, context.skewTuneWorker))
     /*else
@@ -103,7 +103,7 @@ private[spark] abstract class Task[T](val stageId: Int, var partitionId: Int) ex
   var metrics: Option[TaskMetrics] = None
 
   // Task context, to be initialized in run().
-  @transient var context: TaskContextImpl = _ //8.24 SkewTune NewAdd : Del protected，make it public
+  @transient var context: TaskContextImpl = _ //8.24 SkewTuneAdd : Del protected，make it public
 
   // The actual Thread on which the task is running, if any. Initialized in run().
   @volatile @transient private var taskThread: Thread = _

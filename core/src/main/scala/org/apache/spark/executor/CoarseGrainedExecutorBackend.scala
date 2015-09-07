@@ -110,7 +110,7 @@ private[spark] class CoarseGrainedExecutorBackend(
       stop()
       rpcEnv.shutdown()
 
-    //8.24 SkewTune NewAdd : Master向Executor发送Message
+    //8.24 SkewTuneAdd : Master向Executor发送Message
     case RemoveFetchCommand(nextExecutorId, nextTaskId, taskId, allBlocks) =>
       logInfo("Driver commanded a removeFetch")
       val worker = executor.skewTuneWorkerByTaskId.get(taskId)
@@ -147,7 +147,7 @@ private[spark] class CoarseGrainedExecutorBackend(
         logWarning(s"Task $fromTaskId or Task $toTaskId not exists in Executor $executorId")
   }
 
-  //8.24 SkewTune NewAdd Executor向Master报告
+  //8.24 SkewTuneAdd Executor向Master报告
   def transferRemovedFetch(nextExecutorId: String, nextTaskId: Long, returnSeq: Seq[(BlockManagerId, Seq[(BlockId, Long)])]): Unit = {
     val msg = TransferRemovedFetch(nextExecutorId, nextTaskId, returnSeq)
     logInfo(s"Executor $executorId send command removeAndAddResult $msg")
@@ -159,7 +159,7 @@ private[spark] class CoarseGrainedExecutorBackend(
 
   override def reportBlockStatuses(taskID: Long, seq: Seq[(BlockId, Byte)], newTaskId: Option[Long]): Unit = {
     val msg = ReportBlockStatuses(taskID, seq, newTaskId)
-    logInfo(s"Executor $executorId send command reportBlockStatuses $msg")
+    //logInfo(s"Executor $executorId send command reportBlockStatuses $msg")
     driver match {
       case Some(driverRef) => driverRef.send(msg)
       case None => logWarning(s"Drop $msg because has not yet connected to driver")
@@ -168,7 +168,7 @@ private[spark] class CoarseGrainedExecutorBackend(
 
   override def registerNewTask(taskID: Long, executorId: String, seq: Seq[SkewTuneBlockInfo]): Unit = {
     val msg = RegisterNewTask(taskID, executorId, seq)
-    logInfo(s"Executor $executorId send command registerNewTask $msg")
+    //logInfo(s"Executor $executorId send command registerNewTask $msg")
     driver match {
       case Some(driverRef) => driverRef.send(msg)
       case None => logWarning(s"Drop $msg because has not yet connected to driver")
@@ -177,7 +177,26 @@ private[spark] class CoarseGrainedExecutorBackend(
 
   override def reportTaskFinished(taskID: Long): Unit = {
     val msg = ReportTaskFinished(taskID)
-    logInfo(s"Executor $executorId send command reportTaskFinished $msg")
+    //logInfo(s"Executor $executorId send command reportTaskFinished $msg")
+    driver match {
+      case Some(driverRef) => driverRef.send(msg)
+      case None => logWarning(s"Drop $msg because has not yet connected to driver")
+    }
+  }
+
+  //9.6 SkewTuneAdd
+  override def reportTaskComputeSpeed(taskId: Long, executorId: String, speed: Float): Unit = {
+    val msg = ReportTaskComputeSpeed(taskId, executorId, speed)
+    //logInfo(s"Executor $executorId send command reportTaskFinished $msg")
+    driver match {
+      case Some(driverRef) => driverRef.send(msg)
+      case None => logWarning(s"Drop $msg because has not yet connected to driver")
+    }
+  }
+
+  override def reportBlockDownloadSpeed(fromExecutor: String, toExecutor: String, speed: Float): Unit = {
+    val msg = ReportBlockDownloadSpeed(fromExecutor, toExecutor, speed)
+    //logInfo(s"Executor $executorId send command reportTaskFinished $msg")
     driver match {
       case Some(driverRef) => driverRef.send(msg)
       case None => logWarning(s"Drop $msg because has not yet connected to driver")
@@ -202,6 +221,7 @@ private[spark] class CoarseGrainedExecutorBackend(
       case None => logWarning(s"Drop $msg because has not yet connected to driver")
     }
   }
+
 }
 
 private[spark] object CoarseGrainedExecutorBackend extends Logging {

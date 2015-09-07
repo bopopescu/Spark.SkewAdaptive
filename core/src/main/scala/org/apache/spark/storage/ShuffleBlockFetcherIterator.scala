@@ -66,28 +66,28 @@ final class ShuffleBlockFetcherIterator(
    *
    * This should equal localBlocks.size + remoteBlocks.size.
    */
-  private[this] var numBlocksToFetch = 0 //8.19 SkewTune NewAdd，del private[this]，make it public
+  private[this] var numBlocksToFetch = 0 //8.19 SkewTuneAdd，del private[this]，make it public
 
   /**
    * The number of blocks proccessed by the caller. The iterator is exhausted when
    * [[numBlocksProcessed]] == [[numBlocksToFetch]].
    */
-  private[this] var numBlocksProcessed = 0 //8.19 SkewTune NewAdd，del private[this]，make it public
+  private[this] var numBlocksProcessed = 0 //8.19 SkewTuneAdd，del private[this]，make it public
 
   private[this] val startTime = System.currentTimeMillis
 
   /** Local blocks to fetch, excluding zero-sized blocks. */
-  private[this] val localBlocks = new ArrayBuffer[BlockId]() //8.19 SkewTune NewAdd，del private[this]，make it public
+  private[this] val localBlocks = new ArrayBuffer[BlockId]() //8.19 SkewTuneAdd，del private[this]，make it public
 
   /** Remote blocks to fetch, excluding zero-sized blocks. */
-  private[this] val remoteBlocks = new HashSet[BlockId]() //8.19 SkewTune NewAdd，del private[this]，make it public
+  private[this] val remoteBlocks = new HashSet[BlockId]() //8.19 SkewTuneAdd，del private[this]，make it public
 
   /**
    * A queue to hold our results. This turns the asynchronous model provided by
-   * [[BlockTransferService]] into a synchronous model (iterator).
+   * [[org.apache.spark.network.BlockTransferService]] into a synchronous model (iterator).
    */
   //8.17 所有Result队列
-  private[this] val results = new LinkedBlockingQueue[FetchResult] //8.19 SkewTune NewAdd，del private[this]，make it public
+  private[this] val results = new LinkedBlockingQueue[FetchResult] //8.19 SkewTuneAdd，del private[this]，make it public
 
   /**
    * Current [[FetchResult]] being processed. We track this so we can release the current buffer
@@ -100,7 +100,7 @@ final class ShuffleBlockFetcherIterator(
    * Queue of fetch requests to issue; we'll pull requests off this gradually to make sure that
    * the number of bytes in flight is limited to maxBytesInFlight.
    */
-  private[this] var fetchRequests = new Queue[FetchRequest] //8.19 SkewTune NewAdd，del private[this]，make it public
+  private[this] var fetchRequests = new Queue[FetchRequest] //8.19 SkewTuneAdd，del private[this]，make it public
 
   /** Current bytes in flight from our requests */
   private[this] var bytesInFlight = 0L
@@ -115,7 +115,7 @@ final class ShuffleBlockFetcherIterator(
    */
   @volatile private[this] var isZombie = false
 
-  //8.22 SkewTune NewAdd，isTaskRegistered、reportToMasterCache保证在registerNewTask前不调用reportBlockStatus
+  //8.22 SkewTuneAdd，isTaskRegistered、reportToMasterCache保证在registerNewTask前不调用reportBlockStatus
   private[this] val worker = context.asInstanceOf[TaskContextImpl].skewTuneWorker
   @volatile private[this] var isTaskRegistered = false
   private[this] val reportToMasterCache = new ArrayBuffer[(BlockId, Byte)]()
@@ -151,7 +151,7 @@ final class ShuffleBlockFetcherIterator(
             remoteRequests += newRequest
             curBlocks = new ArrayBuffer[(BlockId, Long)]
             curRequestSize = 0
-            //8.22 SkewTune NewAdd，reportBlockStatuses
+            //8.22 SkewTuneAdd，reportBlockStatuses
             val tmpInfos: Seq[(BlockId, SkewTuneBlockInfo)] = curBlocks.map(blockInfoInCur => {
               (blockInfoInCur._1, SkewTuneBlockInfo(blockInfoInCur._1, blockInfoInCur._2,
                 address, SkewTuneBlockStatus.REMOTE_FETCH_WAITING /*, Option(newRequest), None)*/))
@@ -164,7 +164,7 @@ final class ShuffleBlockFetcherIterator(
         if (curBlocks.nonEmpty) {
           val newRequest = new FetchRequest(address, curBlocks)
           remoteRequests += newRequest
-          //8.22 SkewTune NewAdd，reportBlockStatuses
+          //8.22 SkewTuneAdd，reportBlockStatuses
           val tmpInfos: Seq[(BlockId, SkewTuneBlockInfo)] = curBlocks.map(blockInfoInCur => {
             (blockInfoInCur._1, SkewTuneBlockInfo(blockInfoInCur._1, blockInfoInCur._2,
               address, SkewTuneBlockStatus.REMOTE_FETCH_WAITING /*, Some(newRequest), None)*/))
@@ -198,7 +198,7 @@ final class ShuffleBlockFetcherIterator(
         }
       }
       numBlocksToFetch -= returnResults.map(_._2.length).sum
-      //8.22 SkewTune NewAdd
+      //8.22 SkewTuneAdd
       worker.blocks --= returnResults.flatMap(_._2.map(_._1))
     }
     logInfo(s"ShuffleBlockFetchIterator on BlockManager ${blockManager.blockManagerId}。removeFetchRequests ： $returnResults")
@@ -219,7 +219,7 @@ final class ShuffleBlockFetcherIterator(
         if (notExist) {
           totalBlocksToAdd += 1
           results.add(resultInfo._2)
-          //8.22 SkewTune NewAdd
+          //8.22 SkewTuneAdd
           worker.blocks += ((resultInfo._1.blockId, resultInfo._1))
           updateCache += ((resultInfo._1.blockId, 0x00))
         }
@@ -245,7 +245,7 @@ final class ShuffleBlockFetcherIterator(
           && (worker.blocks(blockId).blockState == SkewTuneBlockStatus.LOCAL_FETCHED
           || worker.blocks(blockId).blockState == SkewTuneBlockStatus.REMOTE_FETCHED)) {
           val fetchResult = tmpResultBlocksMap(blockId)
-          //8.22 SkewTune NewAdd
+          //8.22 SkewTuneAdd
           val skewTuneBlockInfo = worker.blocks(blockId)
           results.remove(fetchResult)
           toDelete += ((skewTuneBlockInfo, fetchResult))
@@ -291,6 +291,9 @@ final class ShuffleBlockFetcherIterator(
 
     val address = req.address
 
+    //9.1 SkewTuneAdd : 记录该task到特定blockManager的下载网速
+    val downloadStartTime = System.currentTimeMillis
+
     shuffleClient.fetchBlocks(address.host, address.port, address.executorId, blockIds.toArray,
       new BlockFetchingListener {
         override def onBlockFetchSuccess(blockId: String, buf: ManagedBuffer): Unit = {
@@ -303,7 +306,11 @@ final class ShuffleBlockFetcherIterator(
             results.put(new SuccessFetchResult(BlockId(blockId), sizeMap(blockId), buf))
 
             if (worker.blocks.contains(BlockId(blockId))) {
-              //8.21 SkewTune NewAdd 远程BLocks得到结果后
+              //9.1 SkewTuneAdd 记录executor到executor的下载网速
+              val downloadTimeCost = System.currentTimeMillis() - downloadStartTime
+              worker.reportBlockDownloadSpeed(worker.blocks(BlockId(blockId)).blockManagerId.executorId,
+                worker.blocks(BlockId(blockId)).blockSize.toFloat / downloadTimeCost)
+              //8.21 SkewTuneAdd 远程BLocks得到结果后
               val skewTuneBlockInfo = worker.blocks(BlockId(blockId))
               skewTuneBlockInfo.blockState = SkewTuneBlockStatus.REMOTE_FETCHED
               /*skewTuneBlockInfo.inWhichFetch = None
@@ -327,7 +334,7 @@ final class ShuffleBlockFetcherIterator(
         }
       }
     )
-    //8.21 SkewTune NewAdd 远程BLocks 放入等待发出Fetch请求后
+    //8.21 SkewTuneAdd 远程BLocks 放入等待发出Fetch请求后
     req.blocks.foreach(block => worker.blocks(block._1).blockState = SkewTuneBlockStatus.REMOTE_FETCHING)
     //8.23 向Master报告block status 更新
     val tmp: Seq[(BlockId, Byte)] = req.blocks.map(block => (block._1, SkewTuneBlockStatus.REMOTE_FETCHING))
@@ -408,7 +415,7 @@ final class ShuffleBlockFetcherIterator(
         shuffleMetrics.incLocalBytesRead(buf.size)
         buf.retain()
         //8.31 原生为0，为什么？因为在next()中bytesInFlight要减去这个size，而bytesInFlight是为remote Block Fetch设计的
-        //8.31 SkewTune NewAdd : 代替方案，Result中的block size使用buf.size获得
+        //8.31 SkewTuneAdd : 代替方案，Result中的block size使用buf.size获得
         results.put(new SuccessFetchResult(blockId, 0, buf))
       } catch {
         case e: Exception =>
@@ -429,7 +436,7 @@ final class ShuffleBlockFetcherIterator(
     // Add the remote requests into our queue in a random order
     fetchRequests ++= Utils.randomize(remoteRequests)
 
-    //8.21 SkewTune NewAdd 远程BLocks 放入等待发出Fetch请求后
+    //8.21 SkewTuneAdd 远程BLocks 放入等待发出Fetch请求后
     worker.blocks ++= fetchRequests.flatMap(request => {
       request.blocks.map(block => {
         (block._1, SkewTuneBlockInfo(block._1, block._2,
@@ -454,14 +461,14 @@ final class ShuffleBlockFetcherIterator(
     fetchLocalBlocks()
     logDebug("Got local blocks in " + Utils.getUsedTimeMs(startTime))
 
-    //8.21 SkewTune NewAdd 本地BLocks Fetch后
+    //8.21 SkewTuneAdd 本地BLocks Fetch后
     worker.blocks ++= results.toArray.filter(_.isInstanceOf[SuccessFetchResult]).map(result => {
       val tmp = result.asInstanceOf[SuccessFetchResult]
       (tmp.blockId, SkewTuneBlockInfo(tmp.blockId, tmp.buf.size,
         blockManager.blockManagerId, SkewTuneBlockStatus.LOCAL_FETCHED /*,
         None, Some(tmp)*/))
     }).filter(_._2.blockSize > 0)
-    //8.23 SkewTune NewAdd 向Master报告TaskStart，把task所属的blocks注册上去
+    //8.23 SkewTuneAdd 向Master报告TaskStart，把task所属的blocks注册上去
     worker.registerNewTask(worker.blocks.values.toArray[SkewTuneBlockInfo]) //8.30 Error ERROR ErrorMonitor: Transient association error,HaspMap.values.toSeq:Stream不能序列化
     isTaskRegistered = true
   }
@@ -492,7 +499,7 @@ final class ShuffleBlockFetcherIterator(
       sendRequest(fetchRequests.dequeue())
     }
 
-    //8.23 SkewTune NewAdd 发出缓存的blockstatus更新请求
+    //8.23 SkewTuneAdd 发出缓存的blockstatus更新请求
     if (isTaskRegistered && reportToMasterCache.nonEmpty) {
       worker.reportBlockStatuses(reportToMasterCache)
       reportToMasterCache.clear()
@@ -507,7 +514,7 @@ final class ShuffleBlockFetcherIterator(
       case SuccessFetchResult(blockId, _, buf) =>
         //8.31 spark自己的代码会不会取得size为0的result？
         logInfo(s"ShuffleBlockFetchIterator : on BlockManager ${blockManager.blockManagerId}。next() : getSuccessFetchResult : blockId ${result.blockId} size ${result.asInstanceOf[SuccessFetchResult].size} bufferSize ${result.asInstanceOf[SuccessFetchResult].buf.size()}")
-        //8.21 SkewTune NewAdd BLocks 放入等待发出Fetch请求后
+        //8.21 SkewTuneAdd BLocks 放入等待发出Fetch请求后
         if (worker.blocks.contains(blockId)) {
           val blockInfo = worker.blocks(blockId)
           blockInfo.blockState = SkewTuneBlockStatus.USED
@@ -555,7 +562,7 @@ object ShuffleBlockFetcherIterator {
    *               and the second element is the estimated size, used to calculate bytesInFlight.
    */
   case class FetchRequest(address: BlockManagerId, var blocks: Seq[(BlockId, Long)]) {
-    //8.22 SkewTune NewAdd
+    //8.22 SkewTuneAdd
     val size = blocks.map(_._2).sum
   }
 
