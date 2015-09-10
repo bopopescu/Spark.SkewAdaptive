@@ -17,11 +17,11 @@
 
 package org.apache.spark.executor
 
-import scala.collection.mutable.ArrayBuffer
-
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.executor.DataReadMethod.DataReadMethod
 import org.apache.spark.storage.{BlockId, BlockStatus}
+
+import scala.collection.mutable.ArrayBuffer
 
 /**
  * :: DeveloperApi ::
@@ -348,6 +348,7 @@ class ShuffleReadMetrics extends Serializable {
   private var _localBytesRead: Long = _
   def localBytesRead: Long = _localBytesRead
   private[spark] def incLocalBytesRead(value: Long) = _localBytesRead += value
+  private[spark] def decLocalBytesRead(value: Long) = _localBytesRead -= value
 
   /**
    * Total bytes fetched in the shuffle by this task (both remote and local).
@@ -366,6 +367,9 @@ class ShuffleReadMetrics extends Serializable {
   def recordsRead: Long = _recordsRead
   private[spark] def incRecordsRead(value: Long) = _recordsRead += value
   private[spark] def decRecordsRead(value: Long) = _recordsRead -= value
+
+  //9.10 SkewTuneAdd 记录SkewTune的操作路径 Map[(fromTask,toTask),Array[Seq[(BlockId,Size)]]]
+  //val tunePaths = new mutable.HashMap[(Long,Long),ArrayBuffer[Seq[(BlockId,Long)]]]()
 }
 
 /**

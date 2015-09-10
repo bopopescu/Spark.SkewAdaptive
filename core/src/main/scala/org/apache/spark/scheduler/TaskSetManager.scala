@@ -22,21 +22,18 @@ import java.nio.ByteBuffer
 import java.util.Arrays
 import java.util.concurrent.ConcurrentLinkedQueue
 
-import org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend
-import org.apache.spark.storage.SkewTuneMaster
-
-import scala.collection.mutable
-import scala.collection.mutable.ArrayBuffer
-import scala.collection.mutable.HashMap
-import scala.collection.mutable.HashSet
-import scala.math.{min, max}
-import scala.util.control.NonFatal
-
+import org.apache.spark.TaskState.TaskState
 import org.apache.spark._
 import org.apache.spark.executor.TaskMetrics
 import org.apache.spark.scheduler.SchedulingMode._
-import org.apache.spark.TaskState.TaskState
+import org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend
+import org.apache.spark.storage.SkewTuneMaster
 import org.apache.spark.util.{Clock, SystemClock, Utils}
+
+import scala.collection.mutable
+import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet}
+import scala.math.{max, min}
+import scala.util.control.NonFatal
 
 /**
  * Schedules the tasks within a single TaskSet in the TaskSchedulerImpl. This class keeps track of
@@ -182,7 +179,7 @@ private[spark] class TaskSetManager(
 
   var emittedTaskSizeWarning = false
 
-  //8.26 一个taskset一个master，如果全局一个master，split时会串到其他stage的task中去
+  //8.26 SkewTuneAdd 一个taskset一个master，如果全局一个master，split时会串到其他stage的task中去
   val master = new SkewTuneMaster(this, sched.backend.asInstanceOf[CoarseGrainedSchedulerBackend].networkSpeed)
   //sbt：error:values cannot be volatile。因为volatile表示便以其不能确定岂会发生变化，与val矛盾
   val hasSkewTuneTaskRunByExecutorId = new mutable.HashMap[String, Boolean]
@@ -887,7 +884,7 @@ private[spark] class TaskSetManager(
    *
    */
   private def computeValidLocalityLevels(): Array[TaskLocality.TaskLocality] = {
-    import TaskLocality.{PROCESS_LOCAL, NODE_LOCAL, NO_PREF, RACK_LOCAL, ANY}
+    import TaskLocality.{ANY, NODE_LOCAL, NO_PREF, PROCESS_LOCAL, RACK_LOCAL}
     val levels = new ArrayBuffer[TaskLocality.TaskLocality]
     if (!pendingTasksForExecutor.isEmpty && getLocalityWait(PROCESS_LOCAL) != 0 &&
       pendingTasksForExecutor.keySet.exists(sched.isExecutorAlive(_))) {

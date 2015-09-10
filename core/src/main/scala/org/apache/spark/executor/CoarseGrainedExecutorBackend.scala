@@ -118,7 +118,6 @@ private[spark] class CoarseGrainedExecutorBackend(
         val returnSeq = worker.get.fetchIterator.removeFetchRequests(allBlocks)
         if (returnSeq.nonEmpty) {
           transferRemovedFetch(nextExecutorId, nextTaskId, returnSeq)
-          logInfo(s"executor $executorId removeFetch Success :　$returnSeq")
         }
       } else
         logWarning(s"Task $taskId not exists in Executor $executorId")
@@ -129,7 +128,7 @@ private[spark] class CoarseGrainedExecutorBackend(
       val worker = executor.skewTuneWorkerByTaskId.get(taskId)
       if (worker.nonEmpty) {
         worker.get.fetchIterator.addFetchRequests(allBlocks)
-        logInfo(s"executor $executorId addFetch Success :　$allBlocks")
+        logInfo(s"addFetch to task $taskId on executor $executorId .Success :　$allBlocks")
       } else
         logWarning(s"Task $taskId not exists in Executor $executorId")
 
@@ -141,7 +140,7 @@ private[spark] class CoarseGrainedExecutorBackend(
         val returnResults = workerFrom.get.fetchIterator.removeFetchResults(allBlockIds)
         if (returnResults.nonEmpty) {
           workerTo.get.fetchIterator.addFetchResults(returnResults)
-          logInfo(s"executor $executorId RemoveAndAddResult Success :　$returnResults")
+          logInfo(s"transfer Result from task $fromTaskId to task $toTaskId on executor $executorId RemoveAndAddResult :　$returnResults")
         }
       } else
         logWarning(s"Task $fromTaskId or Task $toTaskId not exists in Executor $executorId")

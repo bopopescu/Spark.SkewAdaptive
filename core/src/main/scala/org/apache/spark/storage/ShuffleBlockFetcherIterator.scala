@@ -105,7 +105,7 @@ final class ShuffleBlockFetcherIterator(
   /** Current bytes in flight from our requests */
   private[this] var bytesInFlight = 0L
 
-  private[this] val shuffleMetrics = context.taskMetrics.createShuffleReadMetricsForDependency()
+  val shuffleMetrics = context.taskMetrics.createShuffleReadMetricsForDependency() //9.10 SkewTuneAdd，del private[this]，make it public
 
   private[this] val serializerInstance: SerializerInstance = serializer.newInstance()
 
@@ -119,12 +119,11 @@ final class ShuffleBlockFetcherIterator(
   private[this] val worker = context.asInstanceOf[TaskContextImpl].skewTuneWorker
   @volatile private[this] var isTaskRegistered = false
   private[this] val reportToMasterCache = new ArrayBuffer[(BlockId, Byte)]()
-
+  private[this] var bytesActualProcess: Long = 0
 
   initialize()
 
-  logInfo(s"ShuffleBlockFetchIterator : on BlockManager ${blockManager.blockManagerId} to fetch $numBlocksToFetch blocks\n" +
-    s"FetchRequests : $fetchRequests \n" +
+  logInfo(s"task ${worker.taskId} on BlockManager ${blockManager.blockManagerId} with Size ${blocksByAddress.flatMap(_._2.map(_._2)).sum} to fetch $numBlocksToFetch blocks\n " +
     s"LocalBlocks : $localBlocks \n" +
     s"RemoteBlocks : $remoteBlocks \n" +
     s"BlockAddress : $blocksByAddress")
@@ -176,7 +175,7 @@ final class ShuffleBlockFetcherIterator(
       }
       fetchRequests ++= remoteRequests
     }
-    logInfo(s"ShuffleBlockFetchIterator : on BlockManager ${blockManager.blockManagerId}。addFetchRequests ： $remoteRequests")
+    logInfo(s"on BlockManager ${blockManager.blockManagerId}。addFetchRequests ： $remoteRequests")
   }
 
   //8.22 在已有的Fetch的blocks数组中查找符合条件的blockId，检查block状态必须为wait_fetch
@@ -201,7 +200,7 @@ final class ShuffleBlockFetcherIterator(
       //8.22 SkewTuneAdd
       worker.blocks --= returnResults.flatMap(_._2.map(_._1))
     }
-    logInfo(s"ShuffleBlockFetchIterator on BlockManager ${blockManager.blockManagerId}。removeFetchRequests ： $returnResults")
+    //logInfo(s"ShuffleBlockFetchIterator on BlockManager ${blockManager.blockManagerId}。removeFetchRequests ： $returnResults")
     returnResults
   }
 
@@ -222,10 +221,20 @@ final class ShuffleBlockFetcherIterator(
           //8.22 SkewTuneAdd
           worker.blocks += ((resultInfo._1.blockId, resultInfo._1))
           updateCache += ((resultInfo._1.blockId, 0x00))
+          //9.10 metrics更新
+          resultInfo._1.blockState match {
+            case SkewTuneBlockStatus.LOCAL_FETCHED =>
+              shuffleMetrics.incLocalBlocksFetched(1)
+              shuffleMetrics.incLocalBytesRead(resultInfo._1.blockSize)
+            case SkewTuneBlockStatus.REMOTE_FETCHED =>
+              shuffleMetrics.incRemoteBlocksFetched(1)
+              shuffleMetrics.incRemoteBytesRead(resultInfo._1.blockSize)
+          }
         }
       })
       numBlocksToFetch += totalBlocksToAdd
     }
+
     //8.23 向Master报告block Status，只在add时需要报告，remove时不需要
     worker.reportBlockStatuses(updateCache, Some(worker.taskId))
     logInfo(s"ShuffleBlockFetchIterator on BlockManager ${blockManager.blockManagerId} 。addFetchResults ： ${updateCache.map(_._1)}")
@@ -249,11 +258,20 @@ final class ShuffleBlockFetcherIterator(
           val skewTuneBlockInfo = worker.blocks(blockId)
           results.remove(fetchResult)
           toDelete += ((skewTuneBlockInfo, fetchResult))
+          //9.10 metrics更新
+          skewTuneBlockInfo.blockState match {
+            case SkewTuneBlockStatus.LOCAL_FETCHED =>
+              shuffleMetrics.decLocalBlocksFetched(1)
+              shuffleMetrics.decLocalBytesRead(skewTuneBlockInfo.blockSize)
+            case SkewTuneBlockStatus.REMOTE_FETCHED =>
+              shuffleMetrics.decRemoteBlocksFetched(1)
+              shuffleMetrics.decRemoteBytesRead(skewTuneBlockInfo.blockSize)
+          }
         }
       })
       numBlocksToFetch -= toDelete.length
     }
-    logInfo(s"ShuffleBlockFetchIterator on BlockManager ${blockManager.blockManagerId}。removeFetchResults ：${toDelete.filter(_._1.blockSize > 0)}")
+    //logInfo(s"ShuffleBlockFetchIterator on BlockManager ${blockManager.blockManagerId}。removeFetchResults ：${toDelete.filter(_._1.blockSize > 0)}")
     toDelete.filter(_._1.blockSize > 0)
   }
 
@@ -513,7 +531,7 @@ final class ShuffleBlockFetcherIterator(
       // 但是一个ShuffleMapTask只处理一个partition的record?
       case SuccessFetchResult(blockId, _, buf) =>
         //8.31 spark自己的代码会不会取得size为0的result？
-        logInfo(s"ShuffleBlockFetchIterator : on BlockManager ${blockManager.blockManagerId}。next() : getSuccessFetchResult : blockId ${result.blockId} size ${result.asInstanceOf[SuccessFetchResult].size} bufferSize ${result.asInstanceOf[SuccessFetchResult].buf.size()}")
+        bytesActualProcess += buf.size()
         //8.21 SkewTuneAdd BLocks 放入等待发出Fetch请求后
         if (worker.blocks.contains(blockId)) {
           val blockInfo = worker.blocks(blockId)
@@ -525,10 +543,12 @@ final class ShuffleBlockFetcherIterator(
             if (blockInfo.blockSize > 0)
               worker.reportBlockStatuses(Seq((blockInfo.blockId, SkewTuneBlockStatus.USED)))
             else
-              logInfo(s"ShuffleBlockFetchIterator : on BlockManager ${blockManager.blockManagerId}。next() : catch SuccessFetchResult with size 0 of block $blockId")
+              logInfo(s"on BlockManager ${blockManager.blockManagerId}。next() : catch SuccessFetchResult with size 0 of block $blockId")
           }
-          else
+          else {
             worker.reportTaskFinished()
+            logInfo(s"task ${worker.taskId} on BlockManager ${blockManager.blockManagerId}。Task Finish with Size $bytesActualProcess processed")
+          }
         }
         // There is a chance that createInputStream can fail (e.g. fetching a local file that does
         // not exist, SPARK-4085). In that case, we should propagate the right exception so
@@ -544,7 +564,7 @@ final class ShuffleBlockFetcherIterator(
           })
         }
     }
-    logInfo(s"ShuffleBlockFetcherIterator :　on BlockManager ${blockManager.blockManagerId} Now to process Result with block ${currentResult.blockId}")
+    logInfo(s"on BlockManager ${blockManager.blockManagerId} Now to process Result with block ${currentResult.blockId}")
 
     (result.blockId, iteratorTry)
   }
