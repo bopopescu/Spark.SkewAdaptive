@@ -203,6 +203,8 @@ private[spark] class ExternalSorter[K, V, C](
         maybeSpillCollection(usingMap = true)
       }
       //8.4 SortShuffle中bypassMergeSort一般为true，就是在没有aggregator的情况下，直接写磁盘
+      //9.11 生成iterator时同时生成每个record的所属的partition（getPartition(kv._1)）,
+      // hashPartition的getPartition算法为abs(key.hashCode % numPartition)，返回非负值
     } else if (bypassMergeSort) {
       // SPARK-4479: Also bypass buffering if merge sort is bypassed to avoid defensive copies
       if (records.hasNext) {
@@ -726,8 +728,8 @@ private[spark] class ExternalSorter[K, V, C](
       outputFile: File): Array[Long] = {
 
     // Track location of each range in the output file
-    val lengths = new Array[Long](numPartitions)
     //8.4 bypassMergeSort = (numPartitions <= bypassMergeThreshold && aggregator.isEmpty && ordering.isEmpty)
+    val lengths = new Array[Long](numPartitions)
     // SortShuffle下，后两项为true；bypassMergeThreshold默认为200，所以bypassMergeSort一般为true，
     // partitionWriters不为空，因为之前insertAll()时spillToPartitionFiles()时已经创建了
     // 所以这是SortShuffle默认分支
