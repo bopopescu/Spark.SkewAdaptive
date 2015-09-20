@@ -134,51 +134,121 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         }
 
       case ReportBlockStatuses(taskID, seq, newTaskId) =>
-        logInfo(s"Master : Received Command ReportBlockStatuses for task $taskID (to new Task $newTaskId)")
-        val master = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskID)).master
-        master.reportBlockStatuses(taskID, seq, newTaskId)
+        //logInfo(s"Master : Received Command ReportBlockStatuses for task $taskID (to new Task $newTaskId)")
+        if(scheduler.taskIdToTaskSetId.get(taskID).isDefined
+            && scheduler.activeTaskSets.get(scheduler.taskIdToTaskSetId(taskID)).isDefined){
+          val master = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskID)).master
+          master.reportBlockStatuses(taskID, seq, newTaskId)
+        }
 
       case ReportTaskFinished(taskID: Long) =>
-        logInfo(s"Master : Received Command ReportTaskFinished for task $taskID")
-        val master = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskID)).master
+        //logInfo(s"Master : Received Command ReportTaskFinished for task $taskID")
+        val taskset = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskID))
+        val master = taskset.master
         master.reportTaskFinished(taskID)
+        //9.18 SkewTuneAdd Release unlock task
+        if(taskset.unlockedTaskId.isDefined && taskset.unlockedTaskId.get == taskID)
+          taskset.unlockedTaskId = None
+        //9.19
+        if(master.demonTasks.contains(taskID))
+          master.demonTasks -= taskID
 
       case RegisterNewTask(taskId, executorId, seq) =>
-        logInfo(s"Master : Received Command RegisterNewTask for task $taskId on Executor $executorId")
+        //logInfo(s"Master : Received Command RegisterNewTask for task $taskId on Executor $executorId")
         val master = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskId)).master
-        master.registerNewTask(taskId, executorId, seq)
+        //9.19 SkewTuneAdd
+        if(master.isRegistered.get(taskId).isEmpty){
+          master.registerNewTask(taskId, executorId, seq)
 
-        val hasSkewTuneTaskRunByExecutorId = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskId)).hasSkewTuneTaskRunByExecutorId
-        //8.24 判断SkewTune重新分配blocks的触发条件:该taskset中正在运行的executor上非第一个task注册上来时调度。
-        // 如果是taakset的最后一个task需要额外的调度
-        //8.30 bug: 所有skewtuneblockInfo中的size都为0，但是hadoopRDD中确实split了16个，也看到了16个offset
-        if (hasSkewTuneTaskRunByExecutorId.contains(executorId) && hasSkewTuneTaskRunByExecutorId(executorId)) {
-          logInfo(s"Master on taskSetManager ${master.taskSetManager.name}: Start SkewTune Split")
-          val isLastTask = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskId)).allPendingTasks.isEmpty
-          val commandsOption = master.computerAndSplit(isLastTask)
-          commandsOption match {
-            case Some((fetchCommands, resultCommands)) =>
-              for (command <- fetchCommands if scheduler.taskIdToExecutorId.contains(command.taskId)) {
-                executorDataMap(scheduler.taskIdToExecutorId(command.taskId)).executorEndpoint.send(command)
-              }
-              for (command <- resultCommands if scheduler.taskIdToExecutorId.contains(command.fromTaskId)) {
-                executorDataMap(scheduler.taskIdToExecutorId(command.fromTaskId)).executorEndpoint.send(command)
-              }
-            case _ =>
-              logInfo(s"Master on taskSetManager ${master.taskSetManager.name}: Terminate because ActiveTasks.length < 3")
+          val demonTasks = master.demonTasks
+          val hasSkewTuneTaskRunByExecutor = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskId)).hasSkewTuneTaskRunByExecutor
+          val availableMaxTaskNumberConcurrent: Int = executorDataMap.map(_._2.totalCores).sum
 
+          //8.24 判断SkewTune重新分配blocks的触发条件:该taskset中正在运行的executor上非第一个task注册上来时调度。
+          // 如果是taakset的最后一个task需要额外的调度
+          //8.30 bug: 所有skewtuneblockInfo中的size都为0，但是hadoopRDD中确实split了16个，也看到了16个offset
+          //if (hasSkewTuneTaskRunByExecutorId.contains(executorId) && hasSkewTuneTaskRunByExecutorId(executorId)) {
+          //9.12 SkewTuneAdd 触发条件：还剩余的task数量 <= 可用的executor数量，并且可调度的block的数量小于一定数量
+          val taskset = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskId))
+          val isLastTask = taskset.allPendingTasks.isEmpty
+          if (availableMaxTaskNumberConcurrent > 0
+          && master.taskFinishedOrRunning  >= availableMaxTaskNumberConcurrent
+          /*taskset.tasksSuccessful >= availableMaxTaskNumberConcurrent
+            && taskset.successful.length - taskset.tasksSuccessful <= availableMaxTaskNumberConcurrent*/) {
+            logInfo(s"on taskSetManager ${master.taskSetManager.name}: Start SkewTune Split with LastTask $isLastTask")
+            /*//9.18 SkewTuneAdd lock the tasks
+            if(isLastTask){
+              master.activeTasks.foreach(info => {
+                executorDataMap(scheduler.taskIdToExecutorId(info._1)).executorEndpoint.send(UnlockTask(info._1))
+              })
+              logInfo(s"\ton taskSetManager ${master.taskSetManager.name}: isLastTask so unlockAllTask ")
+            }else{
+              taskset.unlockedTaskId match {
+                case None =>
+                  //9.18 SkewTuneAdd lock other tasks which active 默认上一个unlocktask结束时下一个递补
+                  val toLockTasks = master.activeTasks.filter(_._1 != taskId)
+                  toLockTasks.foreach(info => {
+                    executorDataMap(scheduler.taskIdToExecutorId(info._1)).executorEndpoint.send(LockTask(info._1))
+                  })
+                  taskset.unlockedTaskId = Some(taskId)
+                  logInfo(s"\ton taskSetManager ${master.taskSetManager.name}: unlockTask is None. to Lock Tasks ${toLockTasks.keys} and unlockTask $taskId")
+                case _ =>
+                  //9.18 SkewTuneAdd lock this task
+                  executorDataMap(scheduler.taskIdToExecutorId(taskId)).executorEndpoint.send(LockTask(taskId))
+                  logInfo(s"\ton taskSetManager ${master.taskSetManager.name}: unlockTask is Some. to Lock Tasks $taskId")
+              }
+            }*/
+            val startTime = System.currentTimeMillis()
+
+            val commandsOption = master.computerAndSplit(isLastTask)
+            commandsOption match {
+              case Some((fetchCommands, resultCommands,largeSizeTaskId,smallSizeTaskId)) =>
+                for (command <- fetchCommands if scheduler.taskIdToExecutorId.contains(command.taskId)) {
+                  executorDataMap(scheduler.taskIdToExecutorId(command.taskId)).executorEndpoint.send(command)
+                }
+                for (command <- resultCommands if scheduler.taskIdToExecutorId.contains(command.fromTaskId)) {
+                  executorDataMap(scheduler.taskIdToExecutorId(command.fromTaskId)).executorEndpoint.send(command)
+                }
+                logInfo(s"\ton taskSetManager ${master.taskSetManager.name}:Valid SkewTuneSplit. TimeCost: ${System.currentTimeMillis - startTime} ms")
+                if(smallSizeTaskId == taskId){
+                  executorDataMap(scheduler.taskIdToExecutorId(smallSizeTaskId)).executorEndpoint.send(UnlockTask(smallSizeTaskId))
+                  logInfo(s"\ton taskSetManager ${master.taskSetManager.name}: to Unlock smallest size task self $smallSizeTaskId ")
+                }else if(demonTasks.contains(smallSizeTaskId)) {
+                  executorDataMap(scheduler.taskIdToExecutorId(smallSizeTaskId)).executorEndpoint.send(UnlockTask(smallSizeTaskId))
+                  demonTasks -= smallSizeTaskId
+                  demonTasks += taskId
+                  logInfo(s"\ton taskSetManager ${master.taskSetManager.name}: to Unlock smallest size task $smallSizeTaskId ")
+                }else
+                  logInfo(s"\ton taskSetManager ${master.taskSetManager.name}: error no task $smallSizeTaskId")
+
+              case None =>
+                logInfo(s"\ton taskSetManager ${master.taskSetManager.name}:Terminate because ActiveTasks.length < 2 or 3. TimeCost: ${System.currentTimeMillis - startTime} ms")
+                if(demonTasks.size >= availableMaxTaskNumberConcurrent - 1) {
+                  executorDataMap(scheduler.taskIdToExecutorId(taskId)).executorEndpoint.send(UnlockTask(taskId))
+                  logInfo(s"\ton taskSetManager ${master.taskSetManager.name}: demonTask.size full .to Unlock current task $taskId ")
+                }
+            }
+          } else{
+            logInfo(s"\ton taskSetManager ${master.taskSetManager.name}: demonTask.size before = $demonTasks ,maxSize = ${availableMaxTaskNumberConcurrent-1}")
+            if(demonTasks.size < availableMaxTaskNumberConcurrent -1 ) {
+              demonTasks += taskId
+            }
           }
+          if(isLastTask)
+            demonTasks.foreach(id => executorDataMap(scheduler.taskIdToExecutorId(id)).executorEndpoint.send(UnlockTask(id)))
+
+          hasSkewTuneTaskRunByExecutor(executorId) = true
+          assert(demonTasks.size <= availableMaxTaskNumberConcurrent - 1 )
         }
-        hasSkewTuneTaskRunByExecutorId(executorId) = true
 
       //9.5 SkewTuneAdd
       case ReportTaskComputeSpeed(taskId, executorId, speed) =>
-        logInfo(s"Master : Received Command ReportTaskComputeSpeed for task $taskId on Executor $executorId with speed $speed byte/ms")
+        //logInfo(s"Master : Received Command ReportTaskComputeSpeed for task $taskId on Executor $executorId with speed $speed byte/ms")
         val master = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskId)).master
         master.reportTaskComputerSpeed(taskId, executorId, speed)
 
       case ReportBlockDownloadSpeed(fromExecutor, toExecutor, speed) =>
-        logInfo(s"Master : Received Command ReportBlockDownloadSpeed from Executor $fromExecutor to Executor $toExecutor with speed $speed byte/ms")
+        logInfo(s"Received Command ReportBlockDownloadSpeed from Executor $fromExecutor to Executor $toExecutor with speed $speed byte/ms")
         val lastSpeed = networkSpeed.getOrElseUpdate((fromExecutor, toExecutor), speed)
         networkSpeed += (((fromExecutor, toExecutor), (lastSpeed + speed) / 2))
     }
@@ -226,7 +296,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         context.reply(true)
         //8.26 SkewTuneAdd
         for (taskset <- scheduler.activeTaskSets.values) {
-          taskset.hasSkewTuneTaskRunByExecutorId.remove(executorId)
+          taskset.hasSkewTuneTaskRunByExecutor.remove(executorId)
         }
 
       case RetrieveSparkProps =>

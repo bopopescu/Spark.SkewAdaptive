@@ -55,7 +55,8 @@ final class ShuffleBlockFetcherIterator(
                                          blockManager: BlockManager,
                                          blocksByAddress: Seq[(BlockManagerId, Seq[(BlockId, Long)])],
                                          serializer: Serializer,
-                                         maxBytesInFlight: Long)
+                                         maxBytesInFlight: Long,
+                                         lockDefault: Boolean = true)
   extends Iterator[(BlockId, Try[Iterator[Any]])] with Logging {
 
   import ShuffleBlockFetcherIterator._
@@ -120,10 +121,14 @@ final class ShuffleBlockFetcherIterator(
   @volatile private[this] var isTaskRegistered = false
   private[this] val reportToMasterCache = new ArrayBuffer[(BlockId, Byte)]()
   private[this] var bytesActualProcess: Long = 0
+  //9.18 SkewTuneAdd
+  var isLocked = lockDefault
+  var blockNumber = 0
+  val taskId = worker.taskId
 
   initialize()
 
-  logInfo(s"task ${worker.taskId} on BlockManager ${blockManager.blockManagerId} with Size ${blocksByAddress.flatMap(_._2.map(_._2)).sum} to fetch $numBlocksToFetch blocks\n " +
+  logInfo(s"task ${worker.taskId} on Executor ${blockManager.blockManagerId.executorId} with Size ${blocksByAddress.flatMap(_._2.map(_._2)).sum} to fetch $numBlocksToFetch blocks\n " +
     s"LocalBlocks : $localBlocks \n" +
     s"RemoteBlocks : $remoteBlocks \n" +
     s"BlockAddress : $blocksByAddress")
@@ -174,8 +179,10 @@ final class ShuffleBlockFetcherIterator(
         }
       }
       fetchRequests ++= remoteRequests
+      if(isLocked)
+        this.notify()
     }
-    logInfo(s"on BlockManager ${blockManager.blockManagerId}。addFetchRequests ： $remoteRequests")
+    logInfo(s"on Executor ${blockManager.blockManagerId.executorId}。addFetchRequests ： $remoteRequests")
   }
 
   //8.22 在已有的Fetch的blocks数组中查找符合条件的blockId，检查block状态必须为wait_fetch
@@ -200,7 +207,7 @@ final class ShuffleBlockFetcherIterator(
       //8.22 SkewTuneAdd
       worker.blocks --= returnResults.flatMap(_._2.map(_._1))
     }
-    //logInfo(s"ShuffleBlockFetchIterator on BlockManager ${blockManager.blockManagerId}。removeFetchRequests ： $returnResults")
+    //logInfo(s"ShuffleBlockFetchIterator on Executor ${blockManager.blockManagerId.executorId}。removeFetchRequests ： $returnResults")
     returnResults
   }
 
@@ -233,11 +240,12 @@ final class ShuffleBlockFetcherIterator(
         }
       })
       numBlocksToFetch += totalBlocksToAdd
+      if(isLocked)
+        this.notify()
     }
-
     //8.23 向Master报告block Status，只在add时需要报告，remove时不需要
     worker.reportBlockStatuses(updateCache, Some(worker.taskId))
-    logInfo(s"ShuffleBlockFetchIterator on BlockManager ${blockManager.blockManagerId} 。addFetchResults ： ${updateCache.map(_._1)}")
+    logInfo(s"ShuffleBlockFetchIterator on Executor ${blockManager.blockManagerId.executorId} 。addFetchResults ： ${updateCache.map(_._1)}")
   }
 
   //8.21 传入参数改为匹配BLockId，检查block状态必须为fetched(local and remote)
@@ -271,7 +279,7 @@ final class ShuffleBlockFetcherIterator(
       })
       numBlocksToFetch -= toDelete.length
     }
-    //logInfo(s"ShuffleBlockFetchIterator on BlockManager ${blockManager.blockManagerId}。removeFetchResults ：${toDelete.filter(_._1.blockSize > 0)}")
+    //logInfo(s"ShuffleBlockFetchIterator on Executor ${blockManager.blockManagerId.executorId}。removeFetchResults ：${toDelete.filter(_._1.blockSize > 0)}")
     toDelete.filter(_._1.blockSize > 0)
   }
 
@@ -479,19 +487,34 @@ final class ShuffleBlockFetcherIterator(
     fetchLocalBlocks()
     logDebug("Got local blocks in " + Utils.getUsedTimeMs(startTime))
 
-    //8.21 SkewTuneAdd 本地BLocks Fetch后
-    worker.blocks ++= results.toArray.filter(_.isInstanceOf[SuccessFetchResult]).map(result => {
-      val tmp = result.asInstanceOf[SuccessFetchResult]
-      (tmp.blockId, SkewTuneBlockInfo(tmp.blockId, tmp.buf.size,
-        blockManager.blockManagerId, SkewTuneBlockStatus.LOCAL_FETCHED /*,
+    synchronized{
+      //8.21 SkewTuneAdd 本地BLocks Fetch后
+      worker.blocks ++= results.toArray.filter(_.isInstanceOf[SuccessFetchResult]).map(result => {
+        val tmp = result.asInstanceOf[SuccessFetchResult]
+        (tmp.blockId, SkewTuneBlockInfo(tmp.blockId, tmp.buf.size,
+          blockManager.blockManagerId, SkewTuneBlockStatus.LOCAL_FETCHED /*,
         None, Some(tmp)*/))
-    }).filter(_._2.blockSize > 0)
-    //8.23 SkewTuneAdd 向Master报告TaskStart，把task所属的blocks注册上去
-    worker.registerNewTask(worker.blocks.values.toArray[SkewTuneBlockInfo]) //8.30 Error ERROR ErrorMonitor: Transient association error,HaspMap.values.toSeq:Stream不能序列化
-    isTaskRegistered = true
+      }).filter(_._2.blockSize > 0)
+      //8.23 SkewTuneAdd 向Master报告TaskStart，把task所属的blocks注册上去
+      if(!isTaskRegistered)
+        worker.registerNewTask(worker.blocks.values.toArray[SkewTuneBlockInfo]) //8.30 Error ERROR ErrorMonitor: Transient association error,HaspMap.values.toSeq:Stream不能序列化
+      isTaskRegistered = true
+    }
   }
 
-  override def hasNext: Boolean = numBlocksProcessed < numBlocksToFetch
+  override def hasNext: Boolean = {
+    //9.18 SKewTuneLock
+    var r = numBlocksProcessed < numBlocksToFetch
+    logInfo(s"task ${worker.taskId} on Executor ${blockManager.blockManagerId.executorId}. numBlocksProcessed: $numBlocksProcessed ,numBlocksToFetch: $numBlocksToFetch")
+    if (!r && isLocked) {
+      logInfo(s"task ${worker.taskId} on Executor ${blockManager.blockManagerId.executorId}. wait because Locked")
+      synchronized {
+        this.wait()
+      }
+      r = numBlocksProcessed < numBlocksToFetch
+    }
+    r
+  }
 
   //8.5 怎么会返回Try[Iterator[Any]]? 【知识点：Scala函数式的异常处理类Try,Success,Failure，及其map/flatMap】
   // 因为case SuccessFetchResult ：
@@ -522,7 +545,6 @@ final class ShuffleBlockFetcherIterator(
       worker.reportBlockStatuses(reportToMasterCache)
       reportToMasterCache.clear()
     }
-
     val iteratorTry: Try[Iterator[Any]] = result match {
       case FailureFetchResult(_, e) =>
         Failure(e)
@@ -536,18 +558,20 @@ final class ShuffleBlockFetcherIterator(
         if (worker.blocks.contains(blockId)) {
           val blockInfo = worker.blocks(blockId)
           blockInfo.blockState = SkewTuneBlockStatus.USED
+          logInfo(s"task ${worker.taskId} on Executor ${blockManager.blockManagerId.executorId} .call next() with block $blockId")
           /*blockInfo.inWhichFetch = None
           blockInfo.inWhichResult = Option(result.asInstanceOf[SuccessFetchResult])*/
-          //8.23 向Master报告block已被使用(当size大于0时)，如果是最后一个block result了，报告task已完成
+          //[@deprecated] 8.23 向Master报告block已被使用(当size大于0时)，如果是最后一个block result了，报告task已完成
+          //9.14 SkewTuneAdd 将reportTaskFinish移动到Executor，以便task能结束的更晚点
           if (numBlocksProcessed < numBlocksToFetch) {
-            if (blockInfo.blockSize > 0)
+            if (blockInfo.blockSize > 0) {
               worker.reportBlockStatuses(Seq((blockInfo.blockId, SkewTuneBlockStatus.USED)))
-            else
-              logInfo(s"on BlockManager ${blockManager.blockManagerId}。next() : catch SuccessFetchResult with size 0 of block $blockId")
-          }
-          else {
-            worker.reportTaskFinished()
-            logInfo(s"task ${worker.taskId} on BlockManager ${blockManager.blockManagerId}。Task Finish with Size $bytesActualProcess processed")
+              blockNumber += 1
+            }
+          } else {
+            logInfo(s"task ${worker.taskId} on Executor ${blockManager.blockManagerId.executorId}。\n" +
+              s"Task Finish with BlockNumber $blockNumber and Size ${shuffleMetrics.localBytesRead} processed.\n" +
+              s"TaskShuffleReadMetrics: local ${shuffleMetrics.localBytesRead}")
           }
         }
         // There is a chance that createInputStream can fail (e.g. fetching a local file that does
@@ -564,7 +588,7 @@ final class ShuffleBlockFetcherIterator(
           })
         }
     }
-    logInfo(s"on BlockManager ${blockManager.blockManagerId} Now to process Result with block ${currentResult.blockId}")
+    //logInfo(s"on Executor ${blockManager.blockManagerId.executorId} Now to process Result with block ${currentResult.blockId}")
 
     (result.blockId, iteratorTry)
   }

@@ -122,7 +122,6 @@ private[spark] class CoarseGrainedExecutorBackend(
       } else
         logWarning(s"Task $taskId not exists in Executor $executorId")
 
-
     case AddFetchCommand(taskId, allBlocks) =>
       logInfo("Driver commanded a addFetch")
       val worker = executor.skewTuneWorkerByTaskId.get(taskId)
@@ -141,9 +140,27 @@ private[spark] class CoarseGrainedExecutorBackend(
         if (returnResults.nonEmpty) {
           workerTo.get.fetchIterator.addFetchResults(returnResults)
           logInfo(s"transfer Result from task $fromTaskId to task $toTaskId on executor $executorId RemoveAndAddResult :　$returnResults")
-        }
+        } else
+          logInfo(s"transfer Result not exist .from task $fromTaskId to task $toTaskId on executor $executorId RemoveAndAddResult :　$returnResults")
       } else
         logWarning(s"Task $fromTaskId or Task $toTaskId not exists in Executor $executorId")
+
+    case LockTask(taskId) =>
+      logInfo(s"Driver commanded a LockTask $taskId")
+      val worker = executor.skewTuneWorkerByTaskId.get(taskId)
+      if(worker.isDefined && worker.get.fetchIterator != null && !worker.get.fetchIterator.isLocked){
+        worker.get.fetchIterator.isLocked = true
+      }
+
+    case UnlockTask(taskId) =>
+      logInfo(s"Driver commanded a UnLockTask $taskId")
+      val worker = executor.skewTuneWorkerByTaskId.get(taskId)
+      if(worker.isDefined && worker.get.fetchIterator != null && worker.get.fetchIterator.isLocked){
+        worker.get.fetchIterator.synchronized {
+          worker.get.fetchIterator.isLocked = false
+          worker.get.fetchIterator.notify()
+        }
+      }
   }
 
   //8.24 SkewTuneAdd Executor向Master报告

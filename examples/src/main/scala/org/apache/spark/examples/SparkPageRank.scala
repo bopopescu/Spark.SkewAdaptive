@@ -17,7 +17,9 @@
 
 package org.apache.spark.examples
 
-import org.apache.spark.SparkContext._
+import java.io.{File, FileWriter}
+import java.util.Calendar
+
 import org.apache.spark.{SparkConf, SparkContext}
 
 /**
@@ -69,7 +71,16 @@ object SparkPageRank {
     }
 
     val output = ranks.collect()
-    output.foreach(tup => println(tup._1 + " has rank: " + tup._2 + "."))
+
+    val date = Calendar.getInstance()
+    val file = new File(s"c:\\Result-PageRank[Iter$iters]-${date.get(java.util.Calendar.YEAR)}-${date.get(java.util.Calendar.MONTH) + 1}-${date.get(java.util.Calendar.DAY_OF_MONTH)}.txt")
+    file.createNewFile()
+    val writer = new FileWriter(file)
+    output.foreach(tup => writer.append(tup._1 + " has rank: " + tup._2 + ".\n"))
+    writer.flush()
+    writer.close()
+
+    //output.foreach(tup => println(tup._1 + " has rank: " + tup._2 + "."))
 
     ctx.stop()
   }

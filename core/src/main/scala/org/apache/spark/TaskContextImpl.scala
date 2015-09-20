@@ -34,7 +34,8 @@ private[spark] class TaskContextImpl(
     val taskMetrics: TaskMetrics = TaskMetrics.empty,
     val executorId: String = null, //8.19 SkewTuneAdd
     val skewTuneBackend: SkewTuneBackend = null,
-    val isShuffleMapTask: Boolean = false)
+    val isShuffleMapTask: Boolean = false,
+    val lockDefault: Boolean = true)
   extends TaskContext
   with Logging {
 

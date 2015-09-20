@@ -292,10 +292,16 @@ private[spark] class Executor(
 
         //9.1 SkewTuneAdd : 报告executor计算tasket中的task时的计算速度
         //9.5 SkewTuneAdd : 必须放在statusUpdate前面，否则Driver端可能把相应的taskset和master删除了导致空指针
-        skewTuneWorkerByTaskId(taskId).reportTaskComputeSpeed(
-          task.context.skewTuneWorker.blocks.map(_._2.blockSize).sum.toFloat / (task.metrics.get.executorRunTime
+        if(task.metrics.get.shuffleReadMetrics.nonEmpty && task.metrics.get.shuffleWriteMetrics.nonEmpty){
+          val speed = task.context.skewTuneWorker.blocks.map(_._2.blockSize).sum.toFloat /
+            (task.metrics.get.executorRunTime
             - task.metrics.get.shuffleReadMetrics.get.fetchWaitTime
-            - task.metrics.get.shuffleWriteMetrics.get.shuffleWriteTime))
+            - task.metrics.get.shuffleWriteMetrics.get.shuffleWriteTime / 1000000)
+          skewTuneWorkerByTaskId(taskId).reportTaskComputeSpeed(if(speed > 0) speed else 0)
+        }
+        //9.14 SkewTuneAAdd : taskFinished移动到Executor
+        skewTuneWorkerByTaskId(taskId).reportTaskFinished()
+        logInfo(s"task $taskId on Executor $executorId Finished")
 
         execBackend.statusUpdate(taskId, TaskState.FINISHED, serializedResult)
 

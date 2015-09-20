@@ -85,17 +85,19 @@ private[hash] object BlockStoreShuffleFetcher extends Logging {
       }
     }
 
-    val blockFetcherItr = new ShuffleBlockFetcherIterator(
-      context,
-      SparkEnv.get.blockManager.shuffleClient,
-      blockManager,
-      blocksByAddress,
-      serializer,
-      // Note: we use getSizeAsMb when no suffix is provided for backwards compatibility
-      SparkEnv.get.conf.getSizeAsMb("spark.reducer.maxSizeInFlight", "48m") * 1024 * 1024)
-
     //8.19 SkewTuneAdd，根据TaskContextImpl中传入的原先的和新注入的信息，创建SkewTuneWorker（一个Task对应一个）
     val contextImpl = context.asInstanceOf[TaskContextImpl]
+
+    val blockFetcherItr = new ShuffleBlockFetcherIterator(
+    context,
+    SparkEnv.get.blockManager.shuffleClient,
+    blockManager,
+    blocksByAddress,
+    serializer,
+    // Note: we use getSizeAsMb when no suffix is provided for backwards compatibility
+    SparkEnv.get.conf.getSizeAsMb("spark.reducer.maxSizeInFlight", "48m") * 1024 * 1024,
+      contextImpl.lockDefault)
+
     contextImpl.skewTuneWorker.fetchIterator = blockFetcherItr
 
     val itr = blockFetcherItr.flatMap(unpackBlock)

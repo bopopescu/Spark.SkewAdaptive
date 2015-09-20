@@ -36,17 +36,22 @@ object PageRankGraphx {
 
   def main(args: Array[String]) {
     if (args.length < 2) {
-      System.err.println("Usage: SparkPageRank <file-users> <file-followers>")
+      System.err.println("Usage: SparkPageRank <file-users> <file-followers> <limit> <userNoAttr>")
       System.exit(1)
     }
 
-    val sparkConf = new SparkConf().setAppName("MyPageRank")
+    val limit = if(args.isDefinedAt(2)) args(2).toFloat else 0.001
+    val userNoAttr = if(args.isDefinedAt(3)) args(3).toBoolean else false
+    val sparkConf = new SparkConf().setAppName(s"PageRankGraph($limit)")
 
     val sc = new SparkContext(sparkConf)
 
     // Load my user data and parse into tuples of user id and attribute list
-    val users = (sc.textFile(args(0))
-      .map(line => line.split(",")).map( parts => (parts.head.toLong, parts.tail) ))
+    val users = if(userNoAttr)
+      sc.textFile(args(0)).map(line => (line.toLong, Array(line)))
+    else
+      sc.textFile(args(0))
+      .map(line => line.split(",")).map(parts => (parts.head.toLong, parts.tail))
 
     // Parse the edge data which is already in userId -> userId format
     val followerGraph = GraphLoader.edgeListFile(sc, args(1))
@@ -62,7 +67,8 @@ object PageRankGraphx {
     val subgraph = graph.subgraph(vpred = (vid, attr) => attr.size == 2)
 
     // Compute the PageRank
-    val pagerankGraph = subgraph.pageRank(0.001)
+
+    val pagerankGraph = subgraph.pageRank(limit)
 
     // Get the attributes of the top pagerank users
     val userInfoWithPageRank = subgraph.outerJoinVertices(pagerankGraph.vertices) {

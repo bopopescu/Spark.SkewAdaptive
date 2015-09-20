@@ -85,7 +85,7 @@ private[spark] class TaskSetManager(
   val successful = new Array[Boolean](numTasks)
   private val numFailures = new Array[Int](numTasks)
   // key is taskId, value is a Map of executor id to when it failed
-  private val failedExecutors = new HashMap[Int, HashMap[String, Long]]()
+  val failedExecutors = new HashMap[Int, HashMap[String, Long]]() //9.12 make it public
 
   val taskAttempts = Array.fill[List[TaskInfo]](numTasks)(Nil)
   var tasksSuccessful = 0
@@ -182,7 +182,9 @@ private[spark] class TaskSetManager(
   //8.26 SkewTuneAdd 一个taskset一个master，如果全局一个master，split时会串到其他stage的task中去
   val master = new SkewTuneMaster(this, sched.backend.asInstanceOf[CoarseGrainedSchedulerBackend].networkSpeed)
   //sbt：error:values cannot be volatile。因为volatile表示便以其不能确定岂会发生变化，与val矛盾
-  val hasSkewTuneTaskRunByExecutorId = new mutable.HashMap[String, Boolean]
+  val hasSkewTuneTaskRunByExecutor = new mutable.HashMap[String, Boolean]
+  //9.28 SkewTuneAdd
+  var unlockedTaskId: Option[Long] = None
 
   /**
    * Add a task to all the pending-task lists that it should be on. If readding is set, we are
