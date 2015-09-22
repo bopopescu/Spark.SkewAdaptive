@@ -122,13 +122,15 @@ final class ShuffleBlockFetcherIterator(
   private[this] val reportToMasterCache = new ArrayBuffer[(BlockId, Byte)]()
   private[this] var bytesActualProcess: Long = 0
   //9.18 SkewTuneAdd
-  var isLocked = lockDefault
-  var blockNumber = 0
+  val taskLockStatus = worker.executorInstance.taskLockStatus
   val taskId = worker.taskId
+  var isLocked = if(taskLockStatus.isDefinedAt(taskId)) taskLockStatus(taskId) else lockDefault
+  var blockNumber = 0
 
   initialize()
 
-  logInfo(s"task ${worker.taskId} on Executor ${blockManager.blockManagerId.executorId} with Size ${blocksByAddress.flatMap(_._2.map(_._2)).sum} to fetch $numBlocksToFetch blocks\n " +
+  logInfo(s"task ${worker.taskId} on Executor ${blockManager.blockManagerId.executorId} isLock $isLocked " +
+    s"with Size ${blocksByAddress.flatMap(_._2.map(_._2)).sum} to fetch $numBlocksToFetch blocks\n " +
     s"LocalBlocks : $localBlocks \n" +
     s"RemoteBlocks : $remoteBlocks \n" +
     s"BlockAddress : $blocksByAddress")
@@ -505,6 +507,7 @@ final class ShuffleBlockFetcherIterator(
   override def hasNext: Boolean = {
     //9.18 SKewTuneLock
     var r = numBlocksProcessed < numBlocksToFetch
+    isLocked = if(taskLockStatus(taskId) == isLocked) isLocked else taskLockStatus(taskId)
     logInfo(s"task ${worker.taskId} on Executor ${blockManager.blockManagerId.executorId}. numBlocksProcessed: $numBlocksProcessed ,numBlocksToFetch: $numBlocksToFetch")
     if (!r && isLocked) {
       logInfo(s"task ${worker.taskId} on Executor ${blockManager.blockManagerId.executorId}. wait because Locked")

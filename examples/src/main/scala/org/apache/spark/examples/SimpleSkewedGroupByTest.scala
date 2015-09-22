@@ -20,10 +20,9 @@ package org.apache.spark.examples
 import java.util.Random
 
 import org.apache.spark.{SparkConf, SparkContext}
-import org.apache.spark.SparkContext._
 
 /**
-  * Usage: SimpleSkewedGroupByTest [numMappers] [numKVPairs] [valSize] [numReducers] [ratio]
+  * Usage: SimpleSkewedGroupByTest [numMappers] [numKVPairs] [valSize] [numReducers] [ratio] [closeCache]
   */
 object SimpleSkewedGroupByTest {
   def main(args: Array[String]) {
@@ -34,10 +33,11 @@ object SimpleSkewedGroupByTest {
     var valSize = if (args.length > 2) args(2).toInt else 1000
     var numReducers = if (args.length > 3) args(3).toInt else numMappers
     var ratio = if (args.length > 4) args(4).toInt else 5.0
+    val closeCache = if(args.isDefinedAt(5)) args(5).toBoolean else false
 
     val sc = new SparkContext(sparkConf)
 
-    val pairs1 = sc.parallelize(0 until numMappers, numMappers).flatMap { p =>
+    var pairs1 = sc.parallelize(0 until numMappers, numMappers).flatMap { p =>
       val ranGen = new Random
       var result = new Array[(Int, Array[Byte])](numKVPairs)
       for (i <- 0 until numKVPairs) {
@@ -54,7 +54,8 @@ object SimpleSkewedGroupByTest {
         }
       }
       result
-    }.cache
+    }
+    pairs1 = if(closeCache) pairs1 else pairs1.cache()
     // Enforce that everything has been calculated and in cache
     pairs1.count
 

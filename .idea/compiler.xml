@@ -36,7 +36,6 @@
         <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <processorPath useClasspath="true" />
-        <module name="spark-launcher_2.10" />
       </profile>
       <profile default="false" name="Annotation profile for spark-examples_2.10" enabled="true">
         <sourceOutputDir name="target\generated-sources\annotations" />
@@ -71,7 +70,6 @@
         <sourceTestOutputDir name="target\generated-test-sources\test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <processorPath useClasspath="true" />
-        <module name="spark-unsafe_2.10" />
       </profile>
       <profile default="false" name="Annotation profile for spark-streaming_2.10" enabled="true">
         <sourceOutputDir name="target\generated-sources\annotations" />

@@ -1,6 +1,7 @@
 package org.apache.spark.storage
 
 import org.apache.spark.Logging
+import org.apache.spark.executor.Executor
 import org.apache.spark.scheduler.TaskSetManager
 import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.{RemoveAndAddResultCommand, RemoveFetchCommand}
 
@@ -13,6 +14,7 @@ private[spark] class SkewTuneWorker(val executorID: String,
                                     var fetchIterator: ShuffleBlockFetcherIterator,
                                     val taskId: Long) extends Logging {
   val blocks = new mutable.HashMap[BlockId, SkewTuneBlockInfo]()
+  var executorInstance: Executor = _
 
   def reportBlockStatuses(seq: Seq[(BlockId, Byte)], newTaskId: Option[Long] = None): Unit = {
     logInfo(s"SkewTuneWorker of task $taskId on executor $executorID : reportBlockStatuses seq $seq")
@@ -62,6 +64,10 @@ private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager,
   val isRegistered = new mutable.HashMap[Long,Boolean]()
   val demonTasks = new mutable.HashSet[Long]()
   var taskFinishedOrRunning = 0
+  var times_communicate = 0
+  var times_compute = 0
+  var overhead_communicate: Long = 0
+  var overhead_compute: Long = 0
 
   //9.5 SkewTuneAdd 在taskset级别上记录某个executor上面的compute速度
   val computeSpeed = new mutable.HashMap[String, Float]()
@@ -91,15 +97,18 @@ private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager,
   //9.5 对一个block Seq统计所需完成时间，不考虑已经used的block 和 maxFlightInKb对Fetching的限制
   //9.14 LOCAL_FETCHED/REMOTE_FETCHED 考虑计算速度。REMOTE_FETCH_WAITING/REMOTE_FETCHING 考虑计算速度和下载速度。其他0
   private def timeBySeq(blockInfo: Seq[SkewTuneBlockInfo], onWhichExecutor: String): Int = {
-    blockInfo.map(info =>
-      if ((info.blockState & (SkewTuneBlockStatus.LOCAL_FETCHED | SkewTuneBlockStatus.REMOTE_FETCHED)) != 0)
-        (info.blockSize / computeSpeed.getOrElse(onWhichExecutor, Float.MaxValue)).toInt
-      else if ((info.blockState & (SkewTuneBlockStatus.REMOTE_FETCH_WAITING | SkewTuneBlockStatus.REMOTE_FETCHING)) != 0)
-        (info.blockSize / networkSpeed.getOrElse((info.blockManagerId.executorId, onWhichExecutor), Float.MaxValue) +
-          info.blockSize / computeSpeed.getOrElse(onWhichExecutor, Float.MaxValue)).toInt
-      else
-        0
-    ).sum
+    if(computeSpeed.isEmpty && networkSpeed.isEmpty)
+      blockInfo.map(_.blockSize).sum.toInt
+    else
+      blockInfo.map(info =>
+        if ((info.blockState & (SkewTuneBlockStatus.LOCAL_FETCHED | SkewTuneBlockStatus.REMOTE_FETCHED)) != 0)
+          (info.blockSize / computeSpeed.getOrElse(onWhichExecutor, Float.MaxValue)).toInt
+        else if ((info.blockState & (SkewTuneBlockStatus.REMOTE_FETCH_WAITING | SkewTuneBlockStatus.REMOTE_FETCHING)) != 0)
+          (info.blockSize / networkSpeed.getOrElse((info.blockManagerId.executorId, onWhichExecutor), Float.MaxValue) +
+            info.blockSize / computeSpeed.getOrElse(onWhichExecutor, Float.MaxValue)).toInt
+        else
+          0
+      ).sum
   }
 
   //9.5 加入了计算速度和下载速度作为调度block的cost基础

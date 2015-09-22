@@ -133,16 +133,21 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
             logWarning(s"Attempted to TransferRemovedFetch to Task $nextTaskId for unknown executor $nextExecutorId.")
         }
 
+
       case ReportBlockStatuses(taskID, seq, newTaskId) =>
         //logInfo(s"Master : Received Command ReportBlockStatuses for task $taskID (to new Task $newTaskId)")
+        val time = System.currentTimeMillis()
         if(scheduler.taskIdToTaskSetId.get(taskID).isDefined
             && scheduler.activeTaskSets.get(scheduler.taskIdToTaskSetId(taskID)).isDefined){
           val master = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskID)).master
           master.reportBlockStatuses(taskID, seq, newTaskId)
+          master.overhead_communicate += System.currentTimeMillis() - time
+          master.times_communicate += 1
         }
 
       case ReportTaskFinished(taskID: Long) =>
         //logInfo(s"Master : Received Command ReportTaskFinished for task $taskID")
+        val time = System.currentTimeMillis()
         val taskset = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskID))
         val master = taskset.master
         master.reportTaskFinished(taskID)
@@ -152,9 +157,12 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         //9.19
         if(master.demonTasks.contains(taskID))
           master.demonTasks -= taskID
+        master.overhead_communicate += System.currentTimeMillis() - time
+        master.times_communicate += 1
 
       case RegisterNewTask(taskId, executorId, seq) =>
         //logInfo(s"Master : Received Command RegisterNewTask for task $taskId on Executor $executorId")
+        var time = System.currentTimeMillis()
         val master = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskId)).master
         //9.19 SkewTuneAdd
         if(master.isRegistered.get(taskId).isEmpty){
@@ -170,12 +178,17 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           //if (hasSkewTuneTaskRunByExecutorId.contains(executorId) && hasSkewTuneTaskRunByExecutorId(executorId)) {
           //9.12 SkewTuneAdd 触发条件：还剩余的task数量 <= 可用的executor数量，并且可调度的block的数量小于一定数量
           val taskset = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskId))
-          val isLastTask = taskset.allPendingTasks.isEmpty
+          //9.19 SkewTuneAdd
+          val isLastTask = master.taskFinishedOrRunning == taskset.taskInfos.size
+          logInfo(s"on taskSetManager ${master.taskSetManager.name}: taskId: $taskId isLastTask $isLastTask ,runningorFinished: ${master.taskFinishedOrRunning}")
+          master.overhead_communicate += System.currentTimeMillis() - time
+          master.times_communicate += 1
+          time = System.currentTimeMillis()
           if (availableMaxTaskNumberConcurrent > 0
           && master.taskFinishedOrRunning  >= availableMaxTaskNumberConcurrent
           /*taskset.tasksSuccessful >= availableMaxTaskNumberConcurrent
             && taskset.successful.length - taskset.tasksSuccessful <= availableMaxTaskNumberConcurrent*/) {
-            logInfo(s"on taskSetManager ${master.taskSetManager.name}: Start SkewTune Split with LastTask $isLastTask")
+            logInfo(s"on taskSetManager ${master.taskSetManager.name}: Start SkewTune Split")
             /*//9.18 SkewTuneAdd lock the tasks
             if(isLastTask){
               master.activeTasks.foreach(info => {
@@ -228,6 +241,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
                   logInfo(s"\ton taskSetManager ${master.taskSetManager.name}: demonTask.size full .to Unlock current task $taskId ")
                 }
             }
+            master.times_compute += 1
           } else{
             logInfo(s"\ton taskSetManager ${master.taskSetManager.name}: demonTask.size before = $demonTasks ,maxSize = ${availableMaxTaskNumberConcurrent-1}")
             if(demonTasks.size < availableMaxTaskNumberConcurrent -1 ) {
@@ -235,7 +249,8 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
             }
           }
           if(isLastTask)
-            demonTasks.foreach(id => executorDataMap(scheduler.taskIdToExecutorId(id)).executorEndpoint.send(UnlockTask(id)))
+            master.activeTasks.keySet.foreach(id => executorDataMap(scheduler.taskIdToExecutorId(id)).executorEndpoint.send(UnlockTask(id)))
+          master.overhead_compute += System.currentTimeMillis() - time
 
           hasSkewTuneTaskRunByExecutor(executorId) = true
           assert(demonTasks.size <= availableMaxTaskNumberConcurrent - 1 )
@@ -244,8 +259,11 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
       //9.5 SkewTuneAdd
       case ReportTaskComputeSpeed(taskId, executorId, speed) =>
         //logInfo(s"Master : Received Command ReportTaskComputeSpeed for task $taskId on Executor $executorId with speed $speed byte/ms")
+        val time = System.currentTimeMillis()
         val master = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskId)).master
         master.reportTaskComputerSpeed(taskId, executorId, speed)
+        master.overhead_communicate += System.currentTimeMillis() - time
+        master.times_communicate += 1
 
       case ReportBlockDownloadSpeed(fromExecutor, toExecutor, speed) =>
         logInfo(s"Received Command ReportBlockDownloadSpeed from Executor $fromExecutor to Executor $toExecutor with speed $speed byte/ms")

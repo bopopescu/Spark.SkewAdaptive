@@ -117,6 +117,8 @@ private[spark] class Executor(
   //8.24 SkewTuneAdd :　Map taskId -> worker
   val skewTuneWorkerByTaskId = new mutable.HashMap[Long, SkewTuneWorker]()
   private val executorInstance: Executor = this
+  //9.20 SkewTuneAdd
+  val taskLockStatus = new mutable.HashMap[Long,Boolean]()
 
   startDriverHeartbeater()
 

@@ -510,6 +510,7 @@ private[spark] class TaskSetManager(
   private def maybeFinishTaskSet() {
     if (isZombie && runningTasks == 0) {
       sched.taskSetFinished(this)
+      logInfo(s"[*] TaskSet ${taskSet.id} Finished .compute ${master.times_compute}/${master.overhead_compute}ms. communicate ${master.times_communicate}/${master.overhead_communicate}ms")
     }
   }
 

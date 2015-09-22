@@ -150,6 +150,8 @@ private[spark] class CoarseGrainedExecutorBackend(
       val worker = executor.skewTuneWorkerByTaskId.get(taskId)
       if(worker.isDefined && worker.get.fetchIterator != null && !worker.get.fetchIterator.isLocked){
         worker.get.fetchIterator.isLocked = true
+        if(executor.taskLockStatus.isDefinedAt(taskId) && !executor.taskLockStatus(taskId))
+          executor.taskLockStatus.update(taskId, true)
       }
 
     case UnlockTask(taskId) =>
@@ -158,6 +160,8 @@ private[spark] class CoarseGrainedExecutorBackend(
       if(worker.isDefined && worker.get.fetchIterator != null && worker.get.fetchIterator.isLocked){
         worker.get.fetchIterator.synchronized {
           worker.get.fetchIterator.isLocked = false
+          if(executor.taskLockStatus.isDefinedAt(taskId))
+            executor.taskLockStatus.update(taskId, false)
           worker.get.fetchIterator.notify()
         }
       }

@@ -25,7 +25,7 @@ import org.apache.spark.serializer.SerializerInstance
 import org.apache.spark.storage.SkewTuneBackend
 import org.apache.spark.unsafe.memory.TaskMemoryManager
 import org.apache.spark.util.{ByteBufferInputStream, Utils}
-import org.apache.spark.{TaskContext, TaskContextImpl}
+import org.apache.spark.{Logging, TaskContext, TaskContextImpl}
 
 import scala.collection.mutable.HashMap
 
@@ -43,7 +43,7 @@ import scala.collection.mutable.HashMap
  * @param stageId id of the stage this task belongs to
  * @param partitionId index of the number in the RDD
  */
-private[spark] abstract class Task[T](val stageId: Int, var partitionId: Int) extends Serializable{
+private[spark] abstract class Task[T](val stageId: Int, var partitionId: Int) extends Serializable with Logging{
 
   /**
    * Called by [[Executor]] to run this task.
@@ -65,6 +65,15 @@ private[spark] abstract class Task[T](val stageId: Int, var partitionId: Int) ex
       executorId = executorId, //sbt: error: parameter is already specified at parameter position 7 调用构造函数时一种是传入参数名=参数值，一种是直接传入参数值。注意方式的统一
       skewTuneBackend = skewTuneBackend, //8.19 SkewTuneAdd
       isShuffleMapTask = this.isInstanceOf[ShuffleMapTask]) //8.28 判断是否是sshufleMapTask，是才有worker
+    //9.20 SkewTuneAdd
+    if(executorInstance != null){
+      if(executorInstance.taskLockStatus.get(taskAttemptId).isEmpty) {
+        executorInstance.taskLockStatus += ((taskAttemptId, context.lockDefault))
+        logInfo(s"task $taskAttemptId run firstly . set status : ${context.lockDefault}")
+      }
+    }
+    context.skewTuneWorker.executorInstance = executorInstance
+
     TaskContext.setTaskContext(context)
     context.taskMetrics.setHostname(Utils.localHostName())
     taskThread = Thread.currentThread()
