@@ -40,7 +40,7 @@ private[spark] class TaskContextImpl(
   with Logging {
 
   //8.27 taskAttemptId = taskId
-  var skewTuneWorker = new SkewTuneWorker(executorId, skewTuneBackend, null, taskAttemptId) //8.19 SkewTuneAdd
+  var skewTuneWorker = new SkewTuneWorker(executorId, skewTuneBackend, ArrayBuffer(), taskAttemptId) //8.19 SkewTuneAdd
 
   // For backwards-compatibility; this method is now deprecated as of 1.3.0.
   override def attemptId(): Long = taskAttemptId

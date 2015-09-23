@@ -126,6 +126,7 @@ final class ShuffleBlockFetcherIterator(
   val taskId = worker.taskId
   var isLocked = if(taskLockStatus.isDefinedAt(taskId)) taskLockStatus(taskId) else lockDefault
   var blockNumber = 0
+  var fetchIndex = 0
 
   initialize()
 
@@ -164,7 +165,7 @@ final class ShuffleBlockFetcherIterator(
             }).filter(_._2.blockSize > 0)
             worker.blocks ++= tmpInfos
             //8.23 向Master报告block Status,block所属的taskid变化
-            worker.reportBlockStatuses(tmpInfos.map(info => (info._1, 0x00.asInstanceOf[Byte])),Some(worker.taskId))
+            worker.reportBlockStatuses(tmpInfos.map(info => (info._1, 0x00.asInstanceOf[Byte])),fetchIndex,Some(worker.taskId))
           }
         }
         if (curBlocks.nonEmpty) {
@@ -177,7 +178,7 @@ final class ShuffleBlockFetcherIterator(
           }).filter(_._2.blockSize > 0)
           worker.blocks ++= tmpInfos
           //8.23 向Master报告block Status，只在add时需要报告，remove时不需要
-          worker.reportBlockStatuses(tmpInfos.map(info => (info._1, 0x00.asInstanceOf[Byte])), Some(worker.taskId))
+          worker.reportBlockStatuses(tmpInfos.map(info => (info._1, 0x00.asInstanceOf[Byte])),fetchIndex, Some(worker.taskId))
         }
       }
       fetchRequests ++= remoteRequests
@@ -246,7 +247,7 @@ final class ShuffleBlockFetcherIterator(
         this.notifyAll()
     }
     //8.23 向Master报告block Status，只在add时需要报告，remove时不需要
-    worker.reportBlockStatuses(updateCache, Some(worker.taskId))
+    worker.reportBlockStatuses(updateCache,fetchIndex, Some(worker.taskId))
     logInfo(s"ShuffleBlockFetchIterator on Executor ${blockManager.blockManagerId.executorId} 。addFetchResults ： ${updateCache.map(_._1)}")
   }
 
@@ -345,7 +346,7 @@ final class ShuffleBlockFetcherIterator(
               skewTuneBlockInfo.inWhichResult = Some(results.peek().asInstanceOf[SuccessFetchResult])*/
               //8.23 向Master报告block已被fetched
               if (isTaskRegistered)
-                worker.reportBlockStatuses(Seq((skewTuneBlockInfo.blockId, SkewTuneBlockStatus.REMOTE_FETCHED)))
+                worker.reportBlockStatuses(Seq((skewTuneBlockInfo.blockId, SkewTuneBlockStatus.REMOTE_FETCHED)),fetchIndex)
               else
                 reportToMasterCache += ((skewTuneBlockInfo.blockId, SkewTuneBlockStatus.REMOTE_FETCHED))
             }
@@ -367,7 +368,7 @@ final class ShuffleBlockFetcherIterator(
     //8.23 向Master报告block status 更新
     val tmp: Seq[(BlockId, Byte)] = req.blocks.map(block => (block._1, SkewTuneBlockStatus.REMOTE_FETCHING))
     if (isTaskRegistered)
-      worker.reportBlockStatuses(tmp)
+      worker.reportBlockStatuses(tmp,fetchIndex)
     else
       reportToMasterCache ++= tmp
   }
@@ -546,7 +547,7 @@ final class ShuffleBlockFetcherIterator(
 
     //8.23 SkewTuneAdd 发出缓存的blockstatus更新请求
     if (isTaskRegistered && reportToMasterCache.nonEmpty) {
-      worker.reportBlockStatuses(reportToMasterCache)
+      worker.reportBlockStatuses(reportToMasterCache,fetchIndex)
       reportToMasterCache.clear()
     }
     val iteratorTry: Try[Iterator[Any]] = result match {
@@ -569,7 +570,7 @@ final class ShuffleBlockFetcherIterator(
           //9.14 SkewTuneAdd 将reportTaskFinish移动到Executor，以便task能结束的更晚点
           if (numBlocksProcessed < numBlocksToFetch) {
             if (blockInfo.blockSize > 0) {
-              worker.reportBlockStatuses(Seq((blockInfo.blockId, SkewTuneBlockStatus.USED)))
+              worker.reportBlockStatuses(Seq((blockInfo.blockId, SkewTuneBlockStatus.USED)),fetchIndex)
               blockNumber += 1
             }
           } else {

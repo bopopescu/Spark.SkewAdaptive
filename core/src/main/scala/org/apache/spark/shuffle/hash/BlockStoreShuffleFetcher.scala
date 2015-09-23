@@ -98,7 +98,8 @@ private[hash] object BlockStoreShuffleFetcher extends Logging {
     SparkEnv.get.conf.getSizeAsMb("spark.reducer.maxSizeInFlight", "48m") * 1024 * 1024,
       contextImpl.lockDefault)
 
-    contextImpl.skewTuneWorker.fetchIterator = blockFetcherItr
+    contextImpl.skewTuneWorker.fetchIterators += blockFetcherItr
+    blockFetcherItr.fetchIndex = contextImpl.skewTuneWorker.fetchIterators.size - 1
 
     val itr = blockFetcherItr.flatMap(unpackBlock)
 

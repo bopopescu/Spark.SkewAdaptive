@@ -37,13 +37,14 @@ private[spark] object CoarseGrainedClusterMessages {
     extends CoarseGrainedClusterMessage
 
   //8.24 SkewTuneAdd Driver到Executor的消息
-  case class RemoveFetchCommand(nextExecutorId: String, nextTaskId: Long, taskId: Long, allBlocks: Seq[(BlockManagerId, Seq[BlockId])])
+  case class RemoveFetchCommand(nextExecutorId: String, nextTaskId: Long, taskId: Long, allBlocks: Seq[(BlockManagerId, Seq[BlockId])],
+                                 fetchIndex: Int)
     extends CoarseGrainedClusterMessage
 
-  case class AddFetchCommand(taskId: Long, allBlocks: Seq[(BlockManagerId, Seq[(BlockId, Long)])])
+  case class AddFetchCommand(taskId: Long, allBlocks: Seq[(BlockManagerId, Seq[(BlockId, Long)])],fetchIndex: Int)
     extends CoarseGrainedClusterMessage
 
-  case class RemoveAndAddResultCommand(allBlockIds: Seq[BlockId], fromTaskId: Long, toTaskId: Long)
+  case class RemoveAndAddResultCommand(allBlockIds: Seq[BlockId], fromTaskId: Long, toTaskId: Long,fetchIndex: Int)
     extends CoarseGrainedClusterMessage
 
   case class LockTask(taskId: Long) extends CoarseGrainedClusterMessage
@@ -51,7 +52,8 @@ private[spark] object CoarseGrainedClusterMessages {
   case class UnlockTask(taskId: Long) extends CoarseGrainedClusterMessage
   //End
   //8.24 SkewTuneAdd Executor到Driver的消息
-  case class TransferRemovedFetch(nextExecutorId: String, nextTaskId: Long, returnSeq: Seq[(BlockManagerId, Seq[(BlockId, Long)])])
+  case class TransferRemovedFetch(nextExecutorId: String, nextTaskId: Long, returnSeq: Seq[(BlockManagerId, Seq[(BlockId, Long)])]
+                                  ,fetchIndex: Int)
     extends CoarseGrainedClusterMessage
 
   /*  object TransferRemovedFetch {
@@ -59,7 +61,7 @@ private[spark] object CoarseGrainedClusterMessages {
         new TransferRemovedFetch(nextExecutorId, nextTaskId, returnSeq)
       }
     }*/
-  case class ReportBlockStatuses(taskID: Long, seq: Seq[(BlockId, Byte)], newTaskId: Option[Long])
+  case class ReportBlockStatuses(taskID: Long, fetchIndex: Int, seq: Seq[(BlockId, Byte)], newTaskId: Option[Long])
     extends CoarseGrainedClusterMessage
 
   /*  object ReportBlockStatuses {
