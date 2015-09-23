@@ -223,6 +223,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
                   executorDataMap(scheduler.taskIdToExecutorId(command.fromTaskId)).executorEndpoint.send(command)
                 }
                 logInfo(s"\ton taskSetManager ${master.taskSetManager.name}:Valid SkewTuneSplit. TimeCost: ${System.currentTimeMillis - startTime} ms")
+                //9.23 最先完成的task可以被unlock了，分为当前task是新task还是之前被lock的task两种情况
                 if(smallSizeTaskId == taskId){
                   executorDataMap(scheduler.taskIdToExecutorId(smallSizeTaskId)).executorEndpoint.send(UnlockTask(smallSizeTaskId))
                   logInfo(s"\ton taskSetManager ${master.taskSetManager.name}: to Unlock smallest size task self $smallSizeTaskId ")
@@ -232,7 +233,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
                   demonTasks += taskId
                   logInfo(s"\ton taskSetManager ${master.taskSetManager.name}: to Unlock smallest size task $smallSizeTaskId ")
                 }else
-                  logInfo(s"\ton taskSetManager ${master.taskSetManager.name}: error no task $smallSizeTaskId")
+                  logInfo(s"\ton taskSetManager ${master.taskSetManager.name}: no need to unlock task $smallSizeTaskId")
 
               case None =>
                 logInfo(s"\ton taskSetManager ${master.taskSetManager.name}:Terminate because ActiveTasks.length < 2 or 3. TimeCost: ${System.currentTimeMillis - startTime} ms")

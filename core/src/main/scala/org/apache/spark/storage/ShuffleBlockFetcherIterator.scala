@@ -182,7 +182,7 @@ final class ShuffleBlockFetcherIterator(
       }
       fetchRequests ++= remoteRequests
       if(isLocked)
-        this.notify()
+        this.notifyAll()
     }
     logInfo(s"on Executor ${blockManager.blockManagerId.executorId}。addFetchRequests ： $remoteRequests")
   }
@@ -243,7 +243,7 @@ final class ShuffleBlockFetcherIterator(
       })
       numBlocksToFetch += totalBlocksToAdd
       if(isLocked)
-        this.notify()
+        this.notifyAll()
     }
     //8.23 向Master报告block Status，只在add时需要报告，remove时不需要
     worker.reportBlockStatuses(updateCache, Some(worker.taskId))
@@ -514,6 +514,7 @@ final class ShuffleBlockFetcherIterator(
       synchronized {
         this.wait()
       }
+      logInfo(s"task ${worker.taskId} on Executor ${blockManager.blockManagerId.executorId}. resume from Locked")
       r = numBlocksProcessed < numBlocksToFetch
     }
     r

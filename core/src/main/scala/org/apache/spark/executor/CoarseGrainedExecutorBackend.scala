@@ -162,7 +162,8 @@ private[spark] class CoarseGrainedExecutorBackend(
           worker.get.fetchIterator.isLocked = false
           if(executor.taskLockStatus.isDefinedAt(taskId))
             executor.taskLockStatus.update(taskId, false)
-          worker.get.fetchIterator.notify()
+          logInfo(s"ExecutorBackend commanded a UnLockTask $taskId to notify")
+          worker.get.fetchIterator.notifyAll()
         }
       }
   }
