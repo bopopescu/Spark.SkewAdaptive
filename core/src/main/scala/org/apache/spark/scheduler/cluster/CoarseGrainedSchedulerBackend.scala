@@ -179,8 +179,8 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           //9.12 SkewTuneAdd 触发条件：还剩余的task数量 <= 可用的executor数量，并且可调度的block的数量小于一定数量
           val taskset = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskId))
           //9.19 SkewTuneAdd
-          val isLastTask = master.taskFinishedOrRunning == taskset.taskInfos.size
-          logInfo(s"on taskSetManager ${master.taskSetManager.name}: taskId: $taskId isLastTask $isLastTask ,runningorFinished: ${master.taskFinishedOrRunning}")
+          val isLastTask = master.taskFinishedOrRunning == taskset.tasks.length
+          logInfo(s"on taskSetManager ${master.taskSetManager.name}: taskId: $taskId isLastTask $isLastTask ,runningorFinished: ${master.taskFinishedOrRunning} taskSize: ${taskset.tasks.length}")
           master.overhead_communicate += System.currentTimeMillis() - time
           master.times_communicate += 1
           time = System.currentTimeMillis()
@@ -267,7 +267,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         master.times_communicate += 1
 
       case ReportBlockDownloadSpeed(fromExecutor, toExecutor, speed) =>
-        logInfo(s"Received Command ReportBlockDownloadSpeed from Executor $fromExecutor to Executor $toExecutor with speed $speed byte/ms")
+        //logInfo(s"Received Command ReportBlockDownloadSpeed from Executor $fromExecutor to Executor $toExecutor with speed $speed byte/ms")
         val lastSpeed = networkSpeed.getOrElseUpdate((fromExecutor, toExecutor), speed)
         networkSpeed += (((fromExecutor, toExecutor), (lastSpeed + speed) / 2))
     }
