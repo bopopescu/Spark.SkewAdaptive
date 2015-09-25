@@ -59,7 +59,7 @@ private[spark] object CoarseGrainedClusterMessages {
         new TransferRemovedFetch(nextExecutorId, nextTaskId, returnSeq)
       }
     }*/
-  case class ReportBlockStatuses(taskID: Long, seq: Seq[(BlockId, Byte)], newTaskId: Option[Long])
+  case class ReportBlockStatuses(taskID: Long, seq: Seq[(BlockId, Byte)], newTaskId: Option[Long],size: Option[Long])
     extends CoarseGrainedClusterMessage
 
   /*  object ReportBlockStatuses {

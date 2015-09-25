@@ -134,13 +134,13 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         }
 
 
-      case ReportBlockStatuses(taskID, seq, newTaskId) =>
+      case ReportBlockStatuses(taskID, seq, newTaskId, size) =>
         //logInfo(s"Master : Received Command ReportBlockStatuses for task $taskID (to new Task $newTaskId)")
         val time = System.currentTimeMillis()
         if(scheduler.taskIdToTaskSetId.get(taskID).isDefined
             && scheduler.activeTaskSets.get(scheduler.taskIdToTaskSetId(taskID)).isDefined){
           val master = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskID)).master
-          master.reportBlockStatuses(taskID, seq, newTaskId)
+          master.reportBlockStatuses(taskID, seq, newTaskId, size)
           master.overhead_communicate += System.currentTimeMillis() - time
           master.times_communicate += 1
         }
@@ -268,8 +268,12 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
 
       case ReportBlockDownloadSpeed(fromExecutor, toExecutor, speed) =>
         //logInfo(s"Received Command ReportBlockDownloadSpeed from Executor $fromExecutor to Executor $toExecutor with speed $speed byte/ms")
-        val lastSpeed = networkSpeed.getOrElseUpdate((fromExecutor, toExecutor), speed)
-        networkSpeed += (((fromExecutor, toExecutor), (lastSpeed + speed) / 2))
+        //9.25 SkewTuneAdd 经常出现speed a-b 4000，b-a 0.06 ,太小的用平均值代替
+        if(speed >= 10){
+          val lastSpeed = networkSpeed.getOrElseUpdate((fromExecutor, toExecutor), speed)
+          networkSpeed += (((fromExecutor, toExecutor), (lastSpeed + speed) / 2))
+        }else if (networkSpeed.isDefinedAt((toExecutor, fromExecutor)) && networkSpeed((toExecutor,fromExecutor)) > 10)
+          networkSpeed += (((fromExecutor, toExecutor), networkSpeed((toExecutor,fromExecutor))))
     }
 
     override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {

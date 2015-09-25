@@ -16,9 +16,9 @@ private[spark] class SkewTuneWorker(val executorID: String,
   val blocks = new mutable.HashMap[BlockId, SkewTuneBlockInfo]()
   var executorInstance: Executor = _
 
-  def reportBlockStatuses(seq: Seq[(BlockId, Byte)], newTaskId: Option[Long] = None): Unit = {
+  def reportBlockStatuses(seq: Seq[(BlockId, Byte)], newTaskId: Option[Long] = None,size: Option[Long] = None): Unit = {
     logInfo(s"SkewTuneWorker of task $taskId on executor $executorID : reportBlockStatuses seq $seq")
-    backend.reportBlockStatuses(taskId, seq, newTaskId)
+    backend.reportBlockStatuses(taskId, seq, newTaskId, size)
   }
 
   def reportTaskFinished(): Unit = {
@@ -43,7 +43,7 @@ private[spark] class SkewTuneWorker(val executorID: String,
 }
 
 private[spark] trait SkewTuneBackend {
-  def reportBlockStatuses(taskID: Long, seq: Seq[(BlockId, Byte)], newTaskId: Option[Long] = None)
+  def reportBlockStatuses(taskID: Long, seq: Seq[(BlockId, Byte)], newTaskId: Option[Long] = None, size: Option[Long])
 
   def reportTaskFinished(taskID: Long)
 
@@ -77,6 +77,8 @@ private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager,
 
   private def costOfSchedule(blockInfo: SkewTuneBlockInfo, oldExecutor: String, newExecutor: String): Int = {
     val blockAddress = blockInfo.blockManagerId.executorId
+    val avgSpeed = computeSpeed.values.sum / computeSpeed.size
+    val avgSpeedNetwork = networkSpeed.values.sum / networkSpeed.size
     //9.6 如果是fetched，只能选择transferResult
     if ((blockInfo.blockState & (SkewTuneBlockStatus.LOCAL_FETCHED | SkewTuneBlockStatus.REMOTE_FETCHED)) != 0) {
       val costDiff = TIME_SCHEDULE_COST_OF_RESULT
@@ -87,10 +89,11 @@ private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager,
       costDiff.toInt
       //9.6 如果是wait_fetch，而且不在同一个executor上
     } else {
-      val costDiff = TIME_SCHEDULE_COST_OF_FETCH + blockInfo.blockSize / networkSpeed.getOrElse((blockAddress, newExecutor), Float.MaxValue)
-      -blockInfo.blockSize / networkSpeed.getOrElse((blockAddress, oldExecutor), Float.MaxValue)
-      +blockInfo.blockSize / computeSpeed.getOrElse(newExecutor, Float.MaxValue)
-      -blockInfo.blockSize / computeSpeed.getOrElse(oldExecutor, Float.MaxValue)
+      val c1Speed = if (computeSpeed.isDefinedAt(oldExecutor)) computeSpeed(oldExecutor) else avgSpeed
+      val c2Speed = if (computeSpeed.isDefinedAt(newExecutor)) computeSpeed(newExecutor) else avgSpeed
+      val costDiff = TIME_SCHEDULE_COST_OF_FETCH + blockInfo.blockSize / networkSpeed.getOrElse((blockAddress, newExecutor), avgSpeedNetwork)
+      - blockInfo.blockSize / networkSpeed.getOrElse((blockAddress, oldExecutor), avgSpeedNetwork) +
+        blockInfo.blockSize / c2Speed -blockInfo.blockSize / c1Speed
       costDiff.toInt
     }
   }
@@ -98,18 +101,22 @@ private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager,
   //9.5 对一个block Seq统计所需完成时间，不考虑已经used的block 和 maxFlightInKb对Fetching的限制
   //9.14 LOCAL_FETCHED/REMOTE_FETCHED 考虑计算速度。REMOTE_FETCH_WAITING/REMOTE_FETCHING 考虑计算速度和下载速度。其他0
   private def timeBySeq(blockInfo: Seq[SkewTuneBlockInfo], onWhichExecutor: String): Long = {
-    if (computeSpeed.isEmpty && networkSpeed.isEmpty)
-      blockInfo.map(_.blockSize).sum.toInt
-    else
-      blockInfo.map(info =>
+    val useTime = blockInfo.forall(b => networkSpeed.isDefinedAt(b.blockManagerId.executorId,onWhichExecutor))
+    if(useTime) {
+      val avgSpeed = computeSpeed.values.sum / computeSpeed.size
+      blockInfo.map(info => {
+        //9.25 SkewTuneAdd reportComputeSpeed被lock特性阻塞了
         if ((info.blockState & (SkewTuneBlockStatus.LOCAL_FETCHED | SkewTuneBlockStatus.REMOTE_FETCHED)) != 0)
-          (info.blockSize / computeSpeed.getOrElse(onWhichExecutor, Float.MaxValue)).toLong
+          (info.blockSize / computeSpeed.getOrElse(onWhichExecutor, avgSpeed)).toLong
         else if ((info.blockState & (SkewTuneBlockStatus.REMOTE_FETCH_WAITING | SkewTuneBlockStatus.REMOTE_FETCHING)) != 0)
-          (info.blockSize / networkSpeed.getOrElse((info.blockManagerId.executorId, onWhichExecutor), Float.MaxValue) +
-            info.blockSize / computeSpeed.getOrElse(onWhichExecutor, Float.MaxValue)).toLong
+          (info.blockSize / networkSpeed(info.blockManagerId.executorId, onWhichExecutor) +
+            info.blockSize / computeSpeed.getOrElse(onWhichExecutor, avgSpeed)).toLong
         else
           0
+      }
       ).sum
+    }else
+      blockInfo.map(_.blockSize).sum
   }
 
   //9.5 加入了计算速度和下载速度作为调度block的cost基础
@@ -366,9 +373,9 @@ private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager,
 
   }
 
-  def reportBlockStatuses(taskId: Long, seq: Seq[(BlockId, Byte)], newTaskId: Option[Long] = None): Unit = {
+  def reportBlockStatuses(taskId: Long, seq: Seq[(BlockId, Byte)], newTaskId: Option[Long] = None, size:Option[Long]): Unit = {
     if (newTaskId.isDefined)
-      logInfo(s"on taskSet ${taskSetManager.name}:reportBlockStatuses : task $taskId, seq $seq, newTaskID: $newTaskId")
+      logInfo(s"on taskSet ${taskSetManager.name}:reportBlockStatuses : task $taskId, seq $seq, newTaskID: $newTaskId, size: ${size.getOrElse(0L)/1024F/1024} MB")
     if (activeTasks.contains(taskId)) {
       val blockMapInOldTask = activeTasks.get(taskId).get.blockMap
       val blockMapInNewTask: Option[mutable.Map[BlockId, SkewTuneBlockInfo]] =

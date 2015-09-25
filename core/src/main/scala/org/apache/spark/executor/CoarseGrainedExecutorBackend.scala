@@ -178,8 +178,8 @@ private[spark] class CoarseGrainedExecutorBackend(
     }
   }
 
-  override def reportBlockStatuses(taskID: Long, seq: Seq[(BlockId, Byte)], newTaskId: Option[Long]): Unit = {
-    val msg = ReportBlockStatuses(taskID, seq, newTaskId)
+  override def reportBlockStatuses(taskID: Long, seq: Seq[(BlockId, Byte)], newTaskId: Option[Long],size: Option[Long]): Unit = {
+    val msg = ReportBlockStatuses(taskID, seq, newTaskId,size)
     //logInfo(s"Executor $executorId send command reportBlockStatuses $msg")
     driver match {
       case Some(driverRef) => driverRef.send(msg)
