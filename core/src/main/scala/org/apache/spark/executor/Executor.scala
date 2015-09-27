@@ -304,9 +304,9 @@ private[spark] class Executor(
           skewTuneWorkerByTaskId(taskId).reportTaskComputeSpeed(if(speed > 0) speed else 0)
         }
         //9.14 SkewTuneAAdd : taskFinished移动到Executor
-        val totalTime = skewTuneWorkerByTaskId(taskId).allIteratorWorkTime
+        //val totalTime = skewTuneWorkerByTaskId(taskId).allIteratorWorkTime
         skewTuneWorkerByTaskId(taskId).reportTaskFinished()
-        logInfo(s"task $taskId on Executor $executorId Finished . IteratorTimeCost: $totalTime ms")
+        logInfo(s"task $taskId on Executor $executorId Finished")
 
         execBackend.statusUpdate(taskId, TaskState.FINISHED, serializedResult)
 

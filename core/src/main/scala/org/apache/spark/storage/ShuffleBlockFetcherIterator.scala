@@ -130,8 +130,7 @@ final class ShuffleBlockFetcherIterator(
   @volatile var isLocked = false
   var blockNumber = 0
   //9.26
-  var totalTime = 0L
-  private var startTimeTmp = System.currentTimeMillis
+  //var totalTime = 0L
 
   initialize()
 
@@ -189,12 +188,7 @@ final class ShuffleBlockFetcherIterator(
           //worker.reportBlockStatuses(tmpInfos.map(info => (info._1, 0x00.asInstanceOf[Byte])), Some(worker.taskId))
         }
       }
-      //9.26
-      val originSeq = fetchRequests.toSeq
-      fetchRequests.clear()
       fetchRequests ++= remoteRequests
-      fetchRequests ++= originSeq
-
       if(tmpFetch.nonEmpty)
         worker.reportBlockStatuses(tmpFetch.map(info => (info._1, 0x00.asInstanceOf[Byte])), Some(worker.taskId),Some(tmpFetch.map(_._2.blockSize).sum))
       if(needLock && isLocked)
@@ -239,14 +233,12 @@ final class ShuffleBlockFetcherIterator(
       .map(_.asInstanceOf[SuccessFetchResult].blockId)
     val tmpResultsToAdd: Seq[BlockId] = resultsToAdd.map(_._2.blockId)
     val updateCache = new ArrayBuffer[(BlockId, Byte, Long)]()
-    val finalResultToAdd = new LinkedBlockingQueue[FetchResult]()
     this.synchronized {
       resultsToAdd.filter(_._1.blockSize > 0).foreach(resultInfo => {
         val notExist = tmpResults.forall(tmpResultsToAdd.contains(_) == false)
         if (notExist) {
           totalBlocksToAdd += 1
-          finalResultToAdd.add(resultInfo._2)
-          //results.add(resultInfo._2)
+          results.add(resultInfo._2)
           //8.22 SkewTuneAdd
           worker.blocks += ((resultInfo._1.blockId, resultInfo._1))
           updateCache += ((resultInfo._1.blockId, 0x00, resultInfo._1.blockSize))
@@ -261,12 +253,6 @@ final class ShuffleBlockFetcherIterator(
           }
         }
       })
-      //9.26 把transfer进来的放到results前面
-      for(result <- results.toArray)
-        finalResultToAdd.add(result.asInstanceOf[FetchResult])
-      results.clear()
-      results.addAll(finalResultToAdd)
-
       numBlocksToFetch += totalBlocksToAdd
       if(needLock && isLocked)
         synchronized {
@@ -532,7 +518,7 @@ final class ShuffleBlockFetcherIterator(
         worker.fetchIndex += 1
         logInfo(s"task ${worker.taskId} .Another fetchIterator ${worker.fetchIndex} this $this")
         worker.reportNextFetchIterator()
-        worker.allIteratorWorkTime += this.totalTime
+        //worker.allIteratorWorkTime += this.totalTime
       }
       worker.fetchIterator = this
       //9.26
@@ -562,14 +548,10 @@ final class ShuffleBlockFetcherIterator(
       synchronized {
         logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}. wait because Locked")
         isLocked = true
-        totalTime += System.currentTimeMillis() - startTimeTmp
-        startTimeTmp = System.currentTimeMillis()
         //9.25 ??? task11/0，10-10时触发了hasNext两次，然后ExecutorBackend的receive()不能进入unlockTask分支，但Akka收到了消息，
         // 为什么会触发两次，为什么会进不了分支？
         this.wait()
       }
-      totalTime += System.currentTimeMillis() - startTimeTmp
-      startTimeTmp = System.currentTimeMillis()
       logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}. resume from Locked")
       r = numBlocksProcessed < numBlocksToFetch
     }

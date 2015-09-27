@@ -255,22 +255,25 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
                   //9.23 最先完成的task可以被unlock了，分为当前task是新task还是之前被lock的task两种情况
                   if (smallSizeTaskId == taskId && !demonTasks.contains(smallSizeTaskId)) {
                     executorDataMap(scheduler.taskIdToExecutorId(smallSizeTaskId)).executorEndpoint.send(UnlockTask(smallSizeTaskId))
-                    logInfo(s"\ton taskSetManager ${master.taskSetManager.name}: to Unlock smallest size task self $smallSizeTaskId ")
+                    logInfo(s"\ton taskSetManager ${master.taskSetManager.name}: to Unlock smallest size self task $smallSizeTaskId/${master.currentFetchIndex} ")
                   } else if (demonTasks.contains(smallSizeTaskId)) {
                     executorDataMap(scheduler.taskIdToExecutorId(smallSizeTaskId)).executorEndpoint.send(UnlockTask(smallSizeTaskId))
                     demonTasks -= smallSizeTaskId
                     demonTasks += taskId
-                    logInfo(s"\ton taskSetManager ${master.taskSetManager.name}: to Unlock smallest size task $smallSizeTaskId ")
+                    logInfo(s"\ton taskSetManager ${master.taskSetManager.name}: to Unlock smallest size task $smallSizeTaskId/${master.currentFetchIndex}  ")
                   } else
                     logInfo(s"\ton taskSetManager ${master.taskSetManager.name}: no need to unlock for demonTask.size = ${demonTasks.size}")
                 }
 
               case None =>
-                logInfo(s"\ton taskSetManager ${master.taskSetManager.name}:Terminate because ActiveTasks.length < 2 or 3. TimeCost: ${System.currentTimeMillis - startTime} ms")
-                if(demonTasks.size >= availableMaxTaskNumberConcurrent - 1) {
-                  executorDataMap(scheduler.taskIdToExecutorId(taskId)).executorEndpoint.send(UnlockTask(taskId))
-                  logInfo(s"\ton taskSetManager ${master.taskSetManager.name}: demonTask.size full .to Unlock current task $taskId ")
+                val smallSizeTaskId = master.getMinSizeTaskId
+                executorDataMap(scheduler.taskIdToExecutorId(smallSizeTaskId)).executorEndpoint.send(UnlockTask(smallSizeTaskId))
+                if(smallSizeTaskId != taskId) {
+                  demonTasks -= smallSizeTaskId
+                  demonTasks += taskId
                 }
+                logInfo(s"\ton taskSetManager ${master.taskSetManager.name}:Terminate because ActiveTasks.length < 2 or 3. TimeCost: ${System.currentTimeMillis - startTime} ms " +
+                  s"smallSizeTask $smallSizeTaskId currenetTask $taskId")
             }
             master.times_compute += 1
           } else{
@@ -308,7 +311,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           //9.25 SkewTuneAdd 前一个Lock阶段中来了后一个Lock阶段的Task，先缓存起来
           val blockMap = new mutable.HashMap[BlockId, SkewTuneBlockInfo]() ++= seq.map(info => (info.blockId, info))
           master.tmpActiveTasks += ((taskId, SkewTuneTaskInfo(taskId, executorId, blockMap)))
-          logInfo(s"on taskSetManager ${master.taskSetManager.name}: tasks $taskId to tmpActiveTasks")
+          logInfo(s"on taskSetManager ${master.taskSetManager.name}: tasks $taskId/${master.currentFetchIndex + 1} to tmpActiveTasks")
         }
 
       //9.5 SkewTuneAdd

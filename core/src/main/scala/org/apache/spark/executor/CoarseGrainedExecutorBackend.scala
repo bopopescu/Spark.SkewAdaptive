@@ -142,7 +142,7 @@ private[spark] class CoarseGrainedExecutorBackend(
           workerTo.get.fetchIterator.addFetchResults(returnResults, fromTaskId)
           logInfo(s"transfer Result from task $fromTaskId/${workerFrom.get.fetchIndex} to task $toTaskId/${workerTo.get.fetchIndex} on executor $executorId RemoveAndAddResult:　$returnResults")
         } else
-          logInfo(s"transfer Result not exist from task $fromTaskId to task $toTaskId on executor $executorId RemoveAndAddResult :　$returnResults")
+          logInfo(s"transfer Result not exist from task $fromTaskId/${workerFrom.get.fetchIndex} to task $toTaskId/${workerTo.get.fetchIndex} on executor $executorId RemoveAndAddResult :　$returnResults")
       } else
         logWarning(s"Task $fromTaskId or Task $toTaskId not exists in Executor $executorId")
 
@@ -156,7 +156,7 @@ private[spark] class CoarseGrainedExecutorBackend(
           transferRemovedFetch(nextExecutorId, nextTaskId, returnResults.groupBy(_._1.blockManagerId).mapValues(_.map(i => (i._1.blockId,i._1.blockSize))).toSeq)
           logInfo(s"transfer Fetch from task $fromTaskId on executor $executorId to task $nextTaskId RemoveResultAndAddFetch :$returnResults")
         } else
-          logInfo(s"transfer Fetch not exist .from task $fromTaskId on executor $executorId to task $nextTaskId RemoveResultAndAddFetch :　$returnResults")
+          logInfo(s"transfer Fetch not exist .from task $fromTaskId/${workerFrom.get.fetchIndex} on executor $executorId to task $nextTaskId RemoveResultAndAddFetch :　$returnResults")
       }else
         logWarning(s"Task $fromTaskId not exists in Executor $executorId")
 
@@ -167,9 +167,9 @@ private[spark] class CoarseGrainedExecutorBackend(
         val returnResults = workerFrom.get.fetchIterator.removeFetchResults(allBlockIds)
         if (returnResults.nonEmpty) {
           addResultToRemoteExecutor(nextExecutorEndpoint, nextTaskId, returnResults,fromTaskId)
-          logInfo(s"transfer Result from task $fromTaskId on executor $executorId to task $nextTaskId RemoveResultAndAddResultCommand :$returnResults")
+          logInfo(s"transfer Result from task $fromTaskId/${workerFrom.get.fetchIndex} on executor $executorId to task $nextTaskId RemoveResultAndAddResultCommand :$returnResults")
         } else
-          logInfo(s"transfer Result not exist .from task $fromTaskId on executor $executorId to task $nextTaskId RemoveResultAndAddResultCommand :　$returnResults")
+          logInfo(s"transfer Result not exist .from task $fromTaskId/${workerFrom.get.fetchIndex} on executor $executorId to task $nextTaskId RemoveResultAndAddResultCommand :　$returnResults")
       }else
         logWarning(s"Task $fromTaskId not exists in Executor $executorId")
       
@@ -184,8 +184,8 @@ private[spark] class CoarseGrainedExecutorBackend(
     //End
       
     case LockTask(taskId) =>
-      logInfo(s"Driver commanded a LockTask $taskId")
       val worker = executor.skewTuneWorkerByTaskId.get(taskId)
+      logInfo(s"Driver commanded a LockTask $taskId/${worker.get.fetchIndex}")
       if(worker.isDefined && worker.get.fetchIterator != null && !worker.get.fetchIterator.needLock){
         worker.get.fetchIterator.needLock = true
         /*if(executor..isDefinedAt(taskId) && !executor.taskLockStatus(taskId))
@@ -194,7 +194,7 @@ private[spark] class CoarseGrainedExecutorBackend(
 
     case UnlockTask(taskId) =>
       val worker = executor.skewTuneWorkerByTaskId.get(taskId)
-      logInfo(s"Driver commanded a UnLockTask $taskId fetchIterator ${worker.get.fetchIterator} locked ${worker.get.fetchIterator.needLock}")
+      logInfo(s"Driver commanded a UnLockTask $taskId/${worker.get.fetchIndex} fetchIterator ${worker.get.fetchIterator} locked ${worker.get.fetchIterator.needLock}")
       if(worker.isDefined) {
         if (worker.get.fetchIterator != null) {
           if (worker.get.fetchIterator.needLock) {
