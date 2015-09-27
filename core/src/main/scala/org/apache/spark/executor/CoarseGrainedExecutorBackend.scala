@@ -28,6 +28,7 @@ import org.apache.spark.rpc._
 import org.apache.spark.scheduler.TaskDescription
 import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages._
 import org.apache.spark.serializer.SerializerInstance
+import org.apache.spark.storage.ShuffleBlockFetcherIterator.SuccessFetchResult
 import org.apache.spark.storage._
 import org.apache.spark.util.{SignalLogger, ThreadUtils, Utils}
 
@@ -112,8 +113,8 @@ private[spark] class CoarseGrainedExecutorBackend(
 
     //8.24 SkewTuneAdd : Master向Executor发送Message
     case RemoveFetchCommand(nextExecutorId, nextTaskId, taskId, allBlocks) =>
-      logInfo("Driver commanded a removeFetch")
       val worker = executor.skewTuneWorkerByTaskId.get(taskId)
+      logInfo(s"Driver commanded a removeFetch from $taskId/${worker.get.fetchIndex} to $nextTaskId on Executor $nextExecutorId blocks ${allBlocks.flatMap(_._2)}")
       if (worker.nonEmpty) {
         val returnSeq = worker.get.fetchIterator.removeFetchRequests(allBlocks)
         if (returnSeq.nonEmpty) {
@@ -123,8 +124,8 @@ private[spark] class CoarseGrainedExecutorBackend(
         logWarning(s"Task $taskId not exists in Executor $executorId")
 
     case AddFetchCommand(taskId, allBlocks) =>
-      logInfo("Driver commanded a addFetch")
       val worker = executor.skewTuneWorkerByTaskId.get(taskId)
+      logInfo(s"Driver commanded a addFetch to task $taskId/${worker.get.fetchIndex} blocks $allBlocks")
       if (worker.nonEmpty) {
         worker.get.fetchIterator.addFetchRequests(allBlocks)
         logInfo(s"addFetch to task $taskId on executor $executorId .Success :　$allBlocks")
@@ -132,38 +133,85 @@ private[spark] class CoarseGrainedExecutorBackend(
         logWarning(s"Task $taskId not exists in Executor $executorId")
 
     case RemoveAndAddResultCommand(allBlockIds, fromTaskId, toTaskId) =>
-      logInfo("Driver commanded a removeAndAddResult")
       val workerFrom = executor.skewTuneWorkerByTaskId.get(fromTaskId)
       val workerTo = executor.skewTuneWorkerByTaskId.get(toTaskId)
+      logInfo(s"Driver commanded a removeAndAddResult from task $fromTaskId/${workerFrom.get.fetchIndex} to task $toTaskId/${workerTo.get.fetchIndex} blocks $allBlockIds")
       if (workerFrom.nonEmpty && workerTo.nonEmpty) {
         val returnResults = workerFrom.get.fetchIterator.removeFetchResults(allBlockIds)
         if (returnResults.nonEmpty) {
-          workerTo.get.fetchIterator.addFetchResults(returnResults)
-          logInfo(s"transfer Result from task $fromTaskId to task $toTaskId on executor $executorId RemoveAndAddResult :　$returnResults")
+          workerTo.get.fetchIterator.addFetchResults(returnResults, fromTaskId)
+          logInfo(s"transfer Result from task $fromTaskId/${workerFrom.get.fetchIndex} to task $toTaskId/${workerTo.get.fetchIndex} on executor $executorId RemoveAndAddResult:　$returnResults")
         } else
-          logInfo(s"transfer Result not exist .from task $fromTaskId to task $toTaskId on executor $executorId RemoveAndAddResult :　$returnResults")
+          logInfo(s"transfer Result not exist from task $fromTaskId to task $toTaskId on executor $executorId RemoveAndAddResult :　$returnResults")
       } else
         logWarning(s"Task $fromTaskId or Task $toTaskId not exists in Executor $executorId")
 
+    //9.26
+    case RemoveResultAndAddFetchCommand(allBlockIds, fromTaskId, nextTaskId, nextExecutorId) =>
+      val workerFrom = executor.skewTuneWorkerByTaskId.get(fromTaskId)
+      logInfo(s"Driver commanded a RemoveResultAndAddFetch from task $fromTaskId/${workerFrom.get.fetchIndex} to task $nextTaskId blocks $allBlockIds")
+      if (workerFrom.nonEmpty) {
+        val returnResults = workerFrom.get.fetchIterator.removeFetchResults(allBlockIds)
+        if (returnResults.nonEmpty) {
+          transferRemovedFetch(nextExecutorId, nextTaskId, returnResults.groupBy(_._1.blockManagerId).mapValues(_.map(i => (i._1.blockId,i._1.blockSize))).toSeq)
+          logInfo(s"transfer Fetch from task $fromTaskId on executor $executorId to task $nextTaskId RemoveResultAndAddFetch :$returnResults")
+        } else
+          logInfo(s"transfer Fetch not exist .from task $fromTaskId on executor $executorId to task $nextTaskId RemoveResultAndAddFetch :　$returnResults")
+      }else
+        logWarning(s"Task $fromTaskId not exists in Executor $executorId")
+
+    case RemoveResultAndAddResultCommand(allBlockIds, fromTaskId, nextTaskId, nextExecutorEndpoint) =>
+      val workerFrom = executor.skewTuneWorkerByTaskId.get(fromTaskId)
+      logInfo(s"Driver commanded a RemoveResultAndAddResultCommand from task $fromTaskId/${workerFrom.get.fetchIndex} to task $nextTaskId blocks $allBlockIds")
+      if (workerFrom.nonEmpty) {
+        val returnResults = workerFrom.get.fetchIterator.removeFetchResults(allBlockIds)
+        if (returnResults.nonEmpty) {
+          addResultToRemoteExecutor(nextExecutorEndpoint, nextTaskId, returnResults,fromTaskId)
+          logInfo(s"transfer Result from task $fromTaskId on executor $executorId to task $nextTaskId RemoveResultAndAddResultCommand :$returnResults")
+        } else
+          logInfo(s"transfer Result not exist .from task $fromTaskId on executor $executorId to task $nextTaskId RemoveResultAndAddResultCommand :　$returnResults")
+      }else
+        logWarning(s"Task $fromTaskId not exists in Executor $executorId")
+      
+    case AddResultCommand(toTaskId, resultInfos, fromTaskId) =>
+      val workerTo = executor.skewTuneWorkerByTaskId.get(toTaskId)
+      logInfo(s"Driver commanded a AddResultCommand from remote task $fromTaskId to task $toTaskId/${workerTo.get.fetchIndex} resultInfo ${resultInfos.map(_._1.blockId)}")
+      if (workerTo.nonEmpty) {
+        workerTo.get.fetchIterator.addFetchResults(resultInfos,fromTaskId)
+        logInfo(s"add Result to task $toTaskId AddResultCommand :　${resultInfos.map(_._1.blockId)}")
+      }else
+        logWarning(s"Task $toTaskId not exists in Executor $executorId")
+    //End
+      
     case LockTask(taskId) =>
       logInfo(s"Driver commanded a LockTask $taskId")
       val worker = executor.skewTuneWorkerByTaskId.get(taskId)
-      if(worker.isDefined && worker.get.fetchIterator != null && !worker.get.fetchIterator.isLocked){
-        worker.get.fetchIterator.isLocked = true
-        if(executor.taskLockStatus.isDefinedAt(taskId) && !executor.taskLockStatus(taskId))
-          executor.taskLockStatus.update(taskId, true)
+      if(worker.isDefined && worker.get.fetchIterator != null && !worker.get.fetchIterator.needLock){
+        worker.get.fetchIterator.needLock = true
+        /*if(executor..isDefinedAt(taskId) && !executor.taskLockStatus(taskId))
+          executor.taskLockStatus.update(taskId, true)*/
       }
 
     case UnlockTask(taskId) =>
-      logInfo(s"Driver commanded a UnLockTask $taskId")
       val worker = executor.skewTuneWorkerByTaskId.get(taskId)
-      if(worker.isDefined && worker.get.fetchIterator != null && worker.get.fetchIterator.isLocked){
-        worker.get.fetchIterator.synchronized {
-          worker.get.fetchIterator.isLocked = false
-          if(executor.taskLockStatus.isDefinedAt(taskId))
-            executor.taskLockStatus.update(taskId, false)
-          logInfo(s"ExecutorBackend commanded a UnLockTask $taskId to notify")
-          worker.get.fetchIterator.notifyAll()
+      logInfo(s"Driver commanded a UnLockTask $taskId fetchIterator ${worker.get.fetchIterator} locked ${worker.get.fetchIterator.needLock}")
+      if(worker.isDefined) {
+        if (worker.get.fetchIterator != null) {
+          if (worker.get.fetchIterator.needLock) {
+            worker.get.fetchIterator.needLock = false
+            /*if(executor.taskLockStatus.isDefinedAt(taskId))
+            executor.taskLockStatus.update(taskId, false)*/
+            if (worker.get.fetchIterator.isLocked) {
+              logInfo(s"ExecutorBackend commanded a UnLockTask $taskId to notify")
+              worker.get.fetchIterator.synchronized {
+                worker.get.fetchIterator.notifyAll()
+              }
+              worker.get.fetchIterator.isLocked = false
+            }
+          }
+        }else{
+          logInfo(s"UnLockTask $taskId . worker.get.fetchIterator == null . cache Unlock")
+          executor.unlockCommandCache += taskId
         }
       }
   }
@@ -177,9 +225,18 @@ private[spark] class CoarseGrainedExecutorBackend(
       case None => logWarning(s"Drop $msg because has not yet connected to driver")
     }
   }
-
-  override def reportBlockStatuses(taskID: Long, seq: Seq[(BlockId, Byte)], newTaskId: Option[Long],size: Option[Long]): Unit = {
-    val msg = ReportBlockStatuses(taskID, seq, newTaskId,size)
+  //9.26 
+  def addResultToRemoteExecutor(nextExecutorEndpoint: RpcEndpointRef, nextTaskId: Long, resultSeq: Seq[(SkewTuneBlockInfo, SuccessFetchResult)],fromTaskId: Long): Unit ={
+    val msg = AddResultCommand(nextTaskId, resultSeq,fromTaskId)
+    logInfo(s"Executor $executorId send command addResultToRemoteExecutor $msg")
+    nextExecutorEndpoint match {
+      case executorRef: RpcEndpointRef => executorRef.send(msg)
+      case null => logWarning(s"Drop $msg because has not yet connected to executor ${nextExecutorEndpoint.name}")
+    }
+  }
+  
+  override def reportBlockStatuses(taskID: Long, seq: Seq[(BlockId, Byte)], oldTaskId: Option[Long],size: Option[Long]): Unit = {
+    val msg = ReportBlockStatuses(taskID, seq, oldTaskId,size)
     //logInfo(s"Executor $executorId send command reportBlockStatuses $msg")
     driver match {
       case Some(driverRef) => driverRef.send(msg)
@@ -223,6 +280,17 @@ private[spark] class CoarseGrainedExecutorBackend(
       case None => logWarning(s"Drop $msg because has not yet connected to driver")
     }
   }
+
+  //9.25 SkewTuneAdd fetchIndex
+  override def reportNextFetchIterator(taskId: Long, fetchIndex: Int): Unit = {
+    val msg = ReportNextFetchIterator(taskId, fetchIndex)
+    //logInfo(s"Executor $executorId send command reportTaskFinished $msg")
+    driver match {
+      case Some(driverRef) => driverRef.send(msg)
+      case None => logWarning(s"Drop $msg because has not yet connected to driver")
+    }
+  }
+
 
   //End
 

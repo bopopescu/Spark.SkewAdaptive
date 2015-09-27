@@ -1,9 +1,10 @@
 package org.apache.spark.storage
 
-import org.apache.spark.Logging
+import org.apache.spark.{SparkConf, Logging}
 import org.apache.spark.executor.Executor
 import org.apache.spark.scheduler.TaskSetManager
-import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.{RemoveAndAddResultCommand, RemoveFetchCommand}
+import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.{RemoveResultAndAddResultCommand, RemoveResultAndAddFetchCommand, RemoveAndAddResultCommand, RemoveFetchCommand}
+import org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend
 
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
@@ -14,15 +15,20 @@ private[spark] class SkewTuneWorker(val executorID: String,
                                     var fetchIterator: ShuffleBlockFetcherIterator,
                                     val taskId: Long) extends Logging {
   val blocks = new mutable.HashMap[BlockId, SkewTuneBlockInfo]()
-  var executorInstance: Executor = _
 
-  def reportBlockStatuses(seq: Seq[(BlockId, Byte)], newTaskId: Option[Long] = None,size: Option[Long] = None): Unit = {
+  var executorInstance: Executor = _
+  //9.26
+  var fetchIndex = 0
+  var allIteratorWorkTime = 0L
+
+  def reportBlockStatuses(seq: Seq[(BlockId, Byte)], oldTaskId: Option[Long] = None, size: Option[Long] = None): Unit = {
     logInfo(s"SkewTuneWorker of task $taskId on executor $executorID : reportBlockStatuses seq $seq")
-    backend.reportBlockStatuses(taskId, seq, newTaskId, size)
+    backend.reportBlockStatuses(taskId, seq, oldTaskId, size)
   }
 
   def reportTaskFinished(): Unit = {
     logInfo(s"SkewTuneWorker of task $taskId on executor $executorID : reportTaskFinished")
+    allIteratorWorkTime += (if(fetchIterator == null) 0L else fetchIterator.totalTime)
     backend.reportTaskFinished(taskId)
   }
 
@@ -40,9 +46,16 @@ private[spark] class SkewTuneWorker(val executorID: String,
     logInfo(s"SkewTuneWorker of task $taskId on executor $executorID : reportBlockDownloadSpeed $speed Byte/ms")
     backend.reportBlockDownloadSpeed(fromExecutor, executorID, speed)
   }
+
+  def reportNextFetchIterator(): Unit = {
+    logInfo(s"SkewTuneWorker of task $taskId on executor $executorID : reportNextFetchIterator Index $fetchIndex")
+    backend.reportNextFetchIterator(taskId, fetchIndex)
+  }
 }
 
 private[spark] trait SkewTuneBackend {
+  def reportNextFetchIterator(taskId: Long, fetchIndex: Int)
+
   def reportBlockStatuses(taskID: Long, seq: Seq[(BlockId, Byte)], newTaskId: Option[Long] = None, size: Option[Long])
 
   def reportTaskFinished(taskID: Long)
@@ -55,8 +68,13 @@ private[spark] trait SkewTuneBackend {
   def reportBlockDownloadSpeed(fromExecutor: String, toExecutor: String, speed: Float)
 }
 
-private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager,
+private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager,val conf: SparkConf,
                                     val networkSpeed: mutable.HashMap[(String, String), Float]) extends Logging {
+  //9.25 SkewTuneAdd
+  var maxFetchIndex = 0
+  var currentFetchIndex = 0
+  val tmpActiveTasks = new mutable.HashMap[Long, SkewTuneTaskInfo]
+  var nextTaskRunningOrFinished = 0
 
   //activeTask接受注册时blockMap为空的task，因为未来可能给它分配skewtuneTask
   val activeTasks = new mutable.HashMap[Long, SkewTuneTaskInfo]
@@ -75,6 +93,14 @@ private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager,
   private val TIME_SCHEDULE_COST_OF_FETCH = 0
   private val TIME_SCHEDULE_COST_OF_RESULT = 0
 
+  val onlyUseSize = conf.getBoolean("spark.skewtune.onlyUseSize",false)
+  val speedRatio = conf.getDouble("spark.skewtune.speedRatio",0.5).toFloat
+  val advanced = conf.getBoolean("spark.skewtune.advanced",false)
+  val useResult2Fetch = conf.getBoolean("spark.skewtune.advanced.useResult2Fetch",true)
+
+  logInfo(s"TaskSet ${taskSetManager.name} InitMaster onlyUseSize $onlyUseSize speedRatio $speedRatio advanced $advanced useResult2Fetch $useResult2Fetch")
+
+  @deprecated
   private def costOfSchedule(blockInfo: SkewTuneBlockInfo, oldExecutor: String, newExecutor: String): Int = {
     val blockAddress = blockInfo.blockManagerId.executorId
     val avgSpeed = computeSpeed.values.sum / computeSpeed.size
@@ -92,8 +118,8 @@ private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager,
       val c1Speed = if (computeSpeed.isDefinedAt(oldExecutor)) computeSpeed(oldExecutor) else avgSpeed
       val c2Speed = if (computeSpeed.isDefinedAt(newExecutor)) computeSpeed(newExecutor) else avgSpeed
       val costDiff = TIME_SCHEDULE_COST_OF_FETCH + blockInfo.blockSize / networkSpeed.getOrElse((blockAddress, newExecutor), avgSpeedNetwork)
-      - blockInfo.blockSize / networkSpeed.getOrElse((blockAddress, oldExecutor), avgSpeedNetwork) +
-        blockInfo.blockSize / c2Speed -blockInfo.blockSize / c1Speed
+      -blockInfo.blockSize / networkSpeed.getOrElse((blockAddress, oldExecutor), avgSpeedNetwork) +
+        blockInfo.blockSize / c2Speed - blockInfo.blockSize / c1Speed
       costDiff.toInt
     }
   }
@@ -101,10 +127,10 @@ private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager,
   //9.5 对一个block Seq统计所需完成时间，不考虑已经used的block 和 maxFlightInKb对Fetching的限制
   //9.14 LOCAL_FETCHED/REMOTE_FETCHED 考虑计算速度。REMOTE_FETCH_WAITING/REMOTE_FETCHING 考虑计算速度和下载速度。其他0
   private def timeBySeq(blockInfo: Seq[SkewTuneBlockInfo], onWhichExecutor: String): Long = {
-    val useTime = blockInfo.forall(b => networkSpeed.isDefinedAt(b.blockManagerId.executorId,onWhichExecutor))
-    if(useTime) {
+    val useTime = blockInfo.forall(b => networkSpeed.isDefinedAt(b.blockManagerId.executorId, onWhichExecutor))
+    if (useTime && !onlyUseSize) {
       val avgSpeed = computeSpeed.values.sum / computeSpeed.size
-      blockInfo.map(info => {
+      val timeBasedOnSpeed = blockInfo.map(info => {
         //9.25 SkewTuneAdd reportComputeSpeed被lock特性阻塞了
         if ((info.blockState & (SkewTuneBlockStatus.LOCAL_FETCHED | SkewTuneBlockStatus.REMOTE_FETCHED)) != 0)
           (info.blockSize / computeSpeed.getOrElse(onWhichExecutor, avgSpeed)).toLong
@@ -113,23 +139,30 @@ private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager,
             info.blockSize / computeSpeed.getOrElse(onWhichExecutor, avgSpeed)).toLong
         else
           0
-      }
-      ).sum
-    }else
+      }).sum
+      if(speedRatio >= 0 && speedRatio <= 1) {
+        val size = blockInfo.map(_.blockSize).sum
+        (size * (1 - speedRatio) + timeBasedOnSpeed * speedRatio).toLong
+      }else
+        timeBasedOnSpeed
+    } else
       blockInfo.map(_.blockSize).sum
   }
 
   //9.5 加入了计算速度和下载速度作为调度block的cost基础
-  def computerAndSplit(isLastTask: Boolean): Option[(Seq[RemoveFetchCommand], Seq[RemoveAndAddResultCommand], Long, Long)] = {
+  def computerAndSplit(isLastTask: Boolean, schedulerBackend: CoarseGrainedSchedulerBackend = null):
+  Option[(Seq[RemoveFetchCommand], Seq[RemoveAndAddResultCommand], Seq[RemoveResultAndAddFetchCommand], Seq[RemoveResultAndAddResultCommand], Long)] = {
     logInfo(s"Master on taskSet ${taskSetManager.name} computerAndSplit with COST. activeTaskNumber: ${activeTasks.keySet}")
     val start_time = System.currentTimeMillis()
     val transferFetches = new mutable.HashMap[(SkewTuneTaskInfo, SkewTuneTaskInfo), mutable.Buffer[SkewTuneBlockInfo]]
     val transferResults = new mutable.HashMap[(SkewTuneTaskInfo, SkewTuneTaskInfo), mutable.Buffer[SkewTuneBlockInfo]]
+    val transferResultToFetches = new mutable.HashMap[(SkewTuneTaskInfo, SkewTuneTaskInfo), mutable.Buffer[SkewTuneBlockInfo]]
+    val transferResultToResults = new mutable.HashMap[(SkewTuneTaskInfo, SkewTuneTaskInfo), mutable.Buffer[SkewTuneBlockInfo]]
     //9.5 按照完成任务所需时间从大到小排序
     val sortedTasks = new ArrayBuffer[SkewTuneTaskInfo] ++= activeTasks.values.toList
       .sortBy(task => timeBySeq(task.blockMap.values.toSeq, task.executorId)).reverse
 
-    logInfo(s"\t\t\t[%%%]sortTasks: ${sortedTasks.map(t=>(t.taskId,t.executorId))})}")
+    logInfo(s"\t\t\t[%%%]sortTasks: ${sortedTasks.map(t => (t.taskId, t.executorId))})}")
     val taskToSplit = if (sortedTasks.length >= 2) Some(sortedTasks.remove(0)) else None
     //8.31 taskToSpilt必须有block时才可以分割
     if (taskToSplit.isDefined && taskToSplit.get.blockMap.nonEmpty) {
@@ -137,22 +170,30 @@ private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager,
       val blocksToSchedule = taskToSplit.get.blockMap.filter(blockInfo =>
         (blockInfo._2.blockState & (SkewTuneBlockStatus.LOCAL_FETCHED | SkewTuneBlockStatus.REMOTE_FETCHED
           | SkewTuneBlockStatus.REMOTE_FETCH_WAITING)) != 0)
+        //9.26
+        .filter(_._2.isMoved == false)
       /*val blockTimeCostNotSchedulable = timeBySeq(taskToSplit.get.blockMap.values
         .filter(_.blockState == SkewTuneBlockStatus.REMOTE_FETCHING).toSeq, taskToSplit.get.executorId)*/
       //if (isLastTask)
       //maximumFairnessSchedule() //sbt :Error :forward reference extends over definition of value fetchCommands。在fetchCommands定义之前就引用了它
       val fetchCommands = new ArrayBuffer[RemoveFetchCommand]()
       val resultCommands = new ArrayBuffer[RemoveAndAddResultCommand]()
+      val resultToFetchCommands = new ArrayBuffer[RemoveResultAndAddFetchCommand]()
+      val resultToResultCommands = new ArrayBuffer[RemoveResultAndAddResultCommand]()
+      var minSizeTaskId: Option[Long] = None
       if (sortedTasks.nonEmpty) {
         val secondTask = sortedTasks.head
         var firstTaskTime = timeBySeq(taskToSplit.get.blockMap.values.toSeq, taskToSplit.get.executorId)
         var maxTimeCostLine = timeBySeq(secondTask.blockMap.values.toSeq, secondTask.executorId)
-
         minimumCostSchedule()
         //9.6 对每个block,找到调度开销最小的目标task列表，检查task是否还能添加新的block进去直到找到一个可行task
         def minimumCostSchedule(): Unit = {
           val tasksToAddBlock = sortedTasks.reverse
-          logInfo(s"\t\t\t[%%%]network ${networkSpeed.map(n => {n._1._1 + "to" + n._1._2 + "=" + n._2})}")
+          logInfo(s"\t\t\t[%%%]network ${
+            networkSpeed.map(n => {
+              n._1._1 + "to" + n._1._2 + "=" + n._2
+            })
+          }")
           logInfo(s"\t\t\t[%%%]compute $computeSpeed")
           logInfo(s"\t\t\t[%%%]taskToSplit ${taskToSplit.get.taskId} on ${taskToSplit.get.executorId}. taskToAddBlock(small2big)= ${tasksToAddBlock.map(i => (i.taskId, i.executorId))}")
           val taskTime = new mutable.HashMap[Long, Long]() ++= tasksToAddBlock.map(info => (info.taskId, timeBySeq(info.blockMap.values.toSeq, info.executorId)))
@@ -163,30 +204,74 @@ private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager,
 
             if ((block._2.blockState & (SkewTuneBlockStatus.LOCAL_FETCHED | SkewTuneBlockStatus.REMOTE_FETCHED)) != 0) {
               logInfo(s"\t\t\t[%%%]block ${block._1} status = Local_Fetched or Remote_Fetched")
-              val taskOp = sortedTasks.filter(task => (task.executorId == taskToSplit.get.executorId)
-                && (maxTimeCostLine - taskTime(task.taskId) > 0)).toList
-                .sortBy(task => {
-                val cost = costOfSchedule(block._2, taskToSplit.get.executorId, task.executorId)
-                logInfo(s"\t\t\t[%%%]costOfSchedule = $cost (${taskToSplit.get.taskId} on ${taskToSplit.get.executorId} -> ${task.taskId} on ${task.executorId})")
-                cost
-              })
-              if (taskOp.nonEmpty) {
-                val task = taskOp.head
-                //9.24 transferResult必须在同一个executor中，如果不满足，就会跳过该block
-                logInfo(s"\t\t\t[%%%]find valid task ${task.taskId} on ${task.executorId}")
-                transferResults.getOrElseUpdate((taskToSplit.get, task), new ArrayBuffer[SkewTuneBlockInfo]()) += block._2
-                firstTaskTime -= timeBySeq(Seq(block._2), taskToSplit.get.executorId)
-                val newTime = taskTime.get(task.taskId).get + timeBySeq(Seq(block._2), task.executorId)
-                taskTime.update(task.taskId, newTime)
-                maxTimeCostLine = Math.max(maxTimeCostLine, newTime.toInt)
+              //9.26 只在executor内部转移
+              if (!advanced) {
+                val taskOp = sortedTasks.filter(task => (task.executorId == taskToSplit.get.executorId)
+                  //9.26 bugFix 加上 = ，防止候选task只有一个导致不调度
+                  && (maxTimeCostLine - taskTime(task.taskId) >= 0)).toList
+                  .sortBy(task => {
+                  /*val cost = costOfSchedule(block._2, taskToSplit.get.executorId, task.executorId)
+                  logInfo(s"\t\t\t[%%%]costOfSchedule = $cost (${taskToSplit.get.taskId} on ${taskToSplit.get.executorId} -> ${task.taskId} on ${task.executorId})")
+                  cost*/
+                  //9.26 按候选Task剩余时间从小到大，因为同一个executor上，所以不算block在不同task上的时间差异了，但下面要算总时间
+                  taskTime.getOrElse(task.taskId, Long.MaxValue)})
+                if (taskOp.nonEmpty) {
+                  val task = taskOp.head
+                  //9.24 transferResult必须在同一个executor中，如果不满足，就会跳过该block
+                  logInfo(s"\t\t\t[%%%] find valid task ${task.taskId} on ${task.executorId}")
+                  transferResults.getOrElseUpdate((taskToSplit.get, task), new ArrayBuffer[SkewTuneBlockInfo]()) += block._2
+                  firstTaskTime -= timeBySeq(Seq(block._2), taskToSplit.get.executorId)
+                  val newTime = taskTime.get(task.taskId).get + timeBySeq(Seq(block._2), task.executorId)
+                  taskTime.update(task.taskId, newTime)
+                  maxTimeCostLine = Math.max(maxTimeCostLine, newTime.toInt)
+                }
+              } else {
+                //9.26 在全部executor中转移
+                //9.26 SkewTuneAdd 不能在同一个Executor中转移Result，就Result2Fetch，
+                // 还有一种思路，直接转移Result，但如果块较大，可能严重拖慢Driver响应时间，
+                // 那吧目的executor的actor对象发过来 ？？？
+                if (useResult2Fetch) {
+                  val taskOp = sortedTasks.filter(_.executorId != taskToSplit.get.executorId).toList
+                    //9.26 sortedTasks本来就是有序的
+                    /*filter(task => maxTimeCostLine - taskTime(task.taskId) >= 0).*/
+                    //9.26 转移到其他executor时，排序按完成时间先后排序
+                    .sortBy(task => taskTime.getOrElse(task.taskId, Long.MaxValue) + timeBySeq(Seq(block._2), task.executorId))
+                  if (taskOp.nonEmpty) {
+                    val task = taskOp.head
+                    logInfo(s"\t\t\t[%%%Advanced R2F] find valid task ${task.taskId} on ${task.executorId}")
+                    transferResultToFetches.getOrElseUpdate((taskToSplit.get, task), new ArrayBuffer[SkewTuneBlockInfo]()) += block._2
+                    firstTaskTime -= timeBySeq(Seq(block._2), taskToSplit.get.executorId)
+                    val newTime = taskTime.get(task.taskId).get + timeBySeq(Seq(block._2), task.executorId)
+                    taskTime.update(task.taskId, newTime)
+                    maxTimeCostLine = Math.max(maxTimeCostLine, newTime.toInt)
+                  } else if (schedulerBackend != null) {
+                    val taskOp = sortedTasks.toList
+                      .sortBy(task => taskTime.getOrElse(task.taskId, Long.MaxValue) + timeBySeq(Seq(block._2), task.executorId))
+                    if (taskOp.nonEmpty) {
+                      val task = taskOp.head
+                      logInfo(s"\t\t\t[%%%Advanced R2R] find valid task ${task.taskId} on ${task.executorId}")
+                      if (task.executorId != taskToSplit.get.executorId)
+                        transferResultToResults.getOrElseUpdate((taskToSplit.get, task), new ArrayBuffer[SkewTuneBlockInfo]()) += block._2
+                      else
+                        transferResults.getOrElseUpdate((taskToSplit.get, task), new ArrayBuffer[SkewTuneBlockInfo]()) += block._2
+                      firstTaskTime -= timeBySeq(Seq(block._2), taskToSplit.get.executorId)
+                      val newTime = taskTime.get(task.taskId).get + timeBySeq(Seq(block._2), task.executorId)
+                      taskTime.update(task.taskId, newTime)
+                      maxTimeCostLine = Math.max(maxTimeCostLine, newTime.toInt)
+                    }
+                  }else
+                    logInfo(s"\t\t\t[%%%Advanced] can't find valid task because of invalid parameters")
+                }
               }
             } else {
               logInfo(s"\t\t\t[%%%]block ${block._1} status = Fetch_Waiting")
-              val taskOp = sortedTasks.filter(info => maxTimeCostLine - taskTime(info.taskId) > 0).toList.
+              val taskOp = sortedTasks.filter(info => maxTimeCostLine - taskTime(info.taskId) >= 0).toList.
                 sortBy(task => {
-                val cost = costOfSchedule(block._2, taskToSplit.get.executorId, task.executorId)
+                /*val cost = costOfSchedule(block._2, taskToSplit.get.executorId, task.executorId)
                 logInfo(s"\t\t\t[%%%]costOfSchedule = $cost (${taskToSplit.get.taskId} on ${taskToSplit.get.executorId} -> ${task.taskId} on ${task.executorId})")
-                cost
+                cost*/
+                //9.26
+                taskTime.getOrElse(task.taskId, Long.MaxValue) + timeBySeq(Seq(block._2), task.executorId)
               })
               if (taskOp.nonEmpty) {
                 val task = taskOp.head
@@ -201,6 +286,7 @@ private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager,
             blocksToSchedule -= block._1
             logInfo(s"\t\t\t[%%%]End Loop maxTimeCostLine $maxTimeCostLine . taskTime $taskTime")
           }
+          minSizeTaskId = Some(taskTime.minBy(_._2)._1)
           logInfo(s"\t\tminimumCostSchedule : Fetches : ${transferFetches.size} , Results : ${transferResults.size}")
         }
       }
@@ -236,12 +322,27 @@ private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager,
       transferResults.foreach(info => {
         resultCommands += RemoveAndAddResultCommand(info._2.map(_.blockId), info._1._1.taskId, info._1._2.taskId)
       })
+      //9.26
+      if (advanced) {
+        if (useResult2Fetch) {
+          transferResultToFetches.foreach(info => {
+            resultToFetchCommands += RemoveResultAndAddFetchCommand(info._2.map(_.blockId), info._1._1.taskId, info._1._2.taskId, info._1._2.executorId)
+          })
+        }
+        else if (schedulerBackend != null) {
+          transferResultToResults.foreach(info => {
+            resultToResultCommands += RemoveResultAndAddResultCommand(info._2.map(_.blockId), info._1._1.taskId, info._1._2.taskId, schedulerBackend.executorDataMap(info._1._2.executorId).executorEndpoint)
+          })
+        }
+      }
 
       val time_used = System.currentTimeMillis() - start_time
 
-      if (fetchCommands.nonEmpty || resultCommands.nonEmpty) {
-        logInfo(s"\t\tcomputerAndSplit : fetchCommands $fetchCommands , resultCommands : $resultCommands . time : $time_used ms")
-        Some((fetchCommands, resultCommands, taskToSplit.get.taskId, sortedTasks.head.taskId))
+      if (fetchCommands.nonEmpty || resultCommands.nonEmpty || resultToFetchCommands.nonEmpty || resultToResultCommands.nonEmpty) {
+        logInfo(s"\t\tcomputerAndSplit : fetchCommands $fetchCommands , resultCommands : $resultCommands " +
+          s", resultToFetchCommands :$resultToFetchCommands , resultToResultCommands : $resultToResultCommands " +
+          s". time : $time_used ms")
+        Some((fetchCommands, resultCommands, resultToFetchCommands, resultToResultCommands, minSizeTaskId.get))
       } else {
         logInfo(s"\t\tcomputerAndSplit Terminate: fetchCommands / resultCommands all empty . time : $time_used ms")
         None
@@ -373,22 +474,31 @@ private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager,
 
   }
 
-  def reportBlockStatuses(taskId: Long, seq: Seq[(BlockId, Byte)], newTaskId: Option[Long] = None, size:Option[Long]): Unit = {
-    if (newTaskId.isDefined)
-      logInfo(s"on taskSet ${taskSetManager.name}:reportBlockStatuses : task $taskId, seq $seq, newTaskID: $newTaskId, size: ${size.getOrElse(0L)/1024F/1024} MB")
+  //9.26 bugFix : taskID == newTaskID when after removeAndAddResult report
+  def reportBlockStatuses(taskId: Long, seq: Seq[(BlockId, Byte)], oldTaskId: Option[Long] = None, size: Option[Long]): Unit = {
+    if (oldTaskId.isDefined)
+      logInfo(s"on taskSet ${taskSetManager.name}:reportBlockStatuses : task $taskId/$currentFetchIndex, seq $seq, newTaskID: $oldTaskId, size: ${size.getOrElse(0L) / 1024F / 1024} MB")
     if (activeTasks.contains(taskId)) {
-      val blockMapInOldTask = activeTasks.get(taskId).get.blockMap
-      val blockMapInNewTask: Option[mutable.Map[BlockId, SkewTuneBlockInfo]] =
-        if (newTaskId.nonEmpty && activeTasks.contains(newTaskId.get)) Some(activeTasks(newTaskId.get).blockMap) else None
+      val blockMapInNewTask = activeTasks.get(taskId).get.blockMap
 
-      for ((blockId, newBlockState) <- seq if blockMapInOldTask.contains(blockId)) {
-        val skewTuneBlockInfo = blockMapInOldTask(blockId)
-        skewTuneBlockInfo.blockState = if (newBlockState > 0) newBlockState else skewTuneBlockInfo.blockState
-        if (blockMapInNewTask.nonEmpty && taskId != newTaskId.get) {
-          blockMapInNewTask.get += ((blockId, skewTuneBlockInfo))
-          blockMapInOldTask -= blockId
+      if (oldTaskId.isEmpty) {
+        for ((blockId, newBlockState) <- seq if blockMapInNewTask.contains(blockId)) {
+          val skewTuneBlockInfo = blockMapInNewTask(blockId)
+          skewTuneBlockInfo.blockState = if (newBlockState > 0) newBlockState else skewTuneBlockInfo.blockState
         }
       }
+      else if (oldTaskId.get != taskId && activeTasks.isDefinedAt(taskId)) {
+        val blockMapInOldTask: mutable.Map[BlockId, SkewTuneBlockInfo] = activeTasks(oldTaskId.get).blockMap
+        for ((blockId, newBlockState) <- seq if blockMapInOldTask.contains(blockId)) {
+          val skewTuneBlockInfo = blockMapInOldTask(blockId)
+          skewTuneBlockInfo.blockState = if (newBlockState > 0) newBlockState else skewTuneBlockInfo.blockState
+          //9.26 bugFix 防止某个block反复在两个Task之间来回
+          skewTuneBlockInfo.isMoved = true
+          blockMapInNewTask += ((blockId, skewTuneBlockInfo))
+          blockMapInOldTask -= blockId
+        }
+      } else
+        logInfo(s"on taskSet ${taskSetManager.name}:reportBlockStatuses : error")
     }
   }
 
@@ -404,17 +514,16 @@ private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager,
     val lastSpeed = computeSpeed.getOrElseUpdate(executorId, speed)
     computeSpeed += ((executorId, (lastSpeed + speed) / 2))
   }
+}
 
-  class SkewTuneTaskInfo(val taskId: Long, val executorId: String, val blockMap: mutable.Map[BlockId, SkewTuneBlockInfo]) extends Serializable {
-    override def toString = s"SkewTuneTask_$taskId :mapSize_${blockMap.size}_onExecutor_$executorId"
+private[spark] class SkewTuneTaskInfo(val taskId: Long, val executorId: String, val blockMap: mutable.Map[BlockId, SkewTuneBlockInfo]) extends Serializable {
+  override def toString = s"SkewTuneTask_$taskId :mapSize_${blockMap.size}_onExecutor_$executorId"
+}
+
+private[spark] object SkewTuneTaskInfo {
+  def apply(taskId: Long, executorId: String, blockMap: mutable.Map[BlockId, SkewTuneBlockInfo]): SkewTuneTaskInfo = {
+    new SkewTuneTaskInfo(taskId, executorId, blockMap)
   }
-
-  object SkewTuneTaskInfo {
-    def apply(taskId: Long, executorId: String, blockMap: mutable.Map[BlockId, SkewTuneBlockInfo]): SkewTuneTaskInfo = {
-      new SkewTuneTaskInfo(taskId, executorId, blockMap)
-    }
-  }
-
 }
 
 private[spark] object SkewTuneBlockStatus {
@@ -431,6 +540,8 @@ private[spark] class SkewTuneBlockInfo(val blockId: BlockId,
                                        var blockState: Byte /*,
                                        var inWhichFetch: Option[FetchRequest],
                                        var inWhichResult: Option[SuccessFetchResult]*/) extends Serializable {
+  var isMoved = false
+
   override def toString = s"SkewTuneBlockInfo_$blockId :blockSize_${blockSize}_onExecutor_${blockManagerId.executorId}"
 }
 

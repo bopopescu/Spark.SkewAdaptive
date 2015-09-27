@@ -21,6 +21,7 @@ import java.nio.ByteBuffer
 
 import org.apache.spark.TaskState.TaskState
 import org.apache.spark.rpc.RpcEndpointRef
+import org.apache.spark.storage.ShuffleBlockFetcherIterator.SuccessFetchResult
 import org.apache.spark.storage.{BlockId, BlockManagerId, SkewTuneBlockInfo}
 import org.apache.spark.util.{SerializableBuffer, Utils}
 
@@ -46,6 +47,15 @@ private[spark] object CoarseGrainedClusterMessages {
   case class RemoveAndAddResultCommand(allBlockIds: Seq[BlockId], fromTaskId: Long, toTaskId: Long)
     extends CoarseGrainedClusterMessage
 
+  //9.26
+  case class RemoveResultAndAddFetchCommand(allBlockIds: Seq[BlockId], fromTaskId: Long, toTaskId: Long, nextExecutorId: String)
+    extends CoarseGrainedClusterMessage
+
+  case class AddResultCommand(taskId: Long, resultInfos: Seq[(SkewTuneBlockInfo, SuccessFetchResult)],fromTaskId: Long) extends CoarseGrainedClusterMessage
+
+  case class RemoveResultAndAddResultCommand(allBlockIds: Seq[BlockId], fromTaskId: Long, nextTaskId: Long, nextExecutorEndpoint: RpcEndpointRef) extends CoarseGrainedClusterMessage
+  //end
+
   case class LockTask(taskId: Long) extends CoarseGrainedClusterMessage
 
   case class UnlockTask(taskId: Long) extends CoarseGrainedClusterMessage
@@ -59,7 +69,7 @@ private[spark] object CoarseGrainedClusterMessages {
         new TransferRemovedFetch(nextExecutorId, nextTaskId, returnSeq)
       }
     }*/
-  case class ReportBlockStatuses(taskID: Long, seq: Seq[(BlockId, Byte)], newTaskId: Option[Long],size: Option[Long])
+  case class ReportBlockStatuses(taskID: Long, seq: Seq[(BlockId, Byte)], oldTaskId: Option[Long],size: Option[Long])
     extends CoarseGrainedClusterMessage
 
   /*  object ReportBlockStatuses {
@@ -90,6 +100,8 @@ private[spark] object CoarseGrainedClusterMessages {
   case class ReportBlockDownloadSpeed(fromExecutor: String, toExecutor: String, speed: Float)
     extends CoarseGrainedClusterMessage
 
+  //9.25
+  case class ReportNextFetchIterator(taskId: Long, index: Int) extends CoarseGrainedClusterMessage
   //End
 
   case object RegisteredExecutor extends CoarseGrainedClusterMessage

@@ -66,12 +66,12 @@ private[spark] abstract class Task[T](val stageId: Int, var partitionId: Int) ex
       skewTuneBackend = skewTuneBackend, //8.19 SkewTuneAdd
       isShuffleMapTask = this.isInstanceOf[ShuffleMapTask]) //8.28 判断是否是sshufleMapTask，是才有worker
     //9.20 SkewTuneAdd
-    if(executorInstance != null){
+    /*if(executorInstance != null){
       if(executorInstance.taskLockStatus.get(taskAttemptId).isEmpty) {
         executorInstance.taskLockStatus += ((taskAttemptId, context.lockDefault))
         logInfo(s"task $taskAttemptId run firstly . set status : ${context.lockDefault}")
       }
-    }
+    }*/
     context.skewTuneWorker.executorInstance = executorInstance
 
     TaskContext.setTaskContext(context)

@@ -118,7 +118,9 @@ private[spark] class Executor(
   val skewTuneWorkerByTaskId = new mutable.HashMap[Long, SkewTuneWorker]()
   private val executorInstance: Executor = this
   //9.20 SkewTuneAdd
-  val taskLockStatus = new mutable.HashMap[Long,Boolean]()
+  //val taskLockStatus = new mutable.HashMap[Long,Boolean]()
+  //9.26
+  val unlockCommandCache = new mutable.HashSet[Long]()
 
   startDriverHeartbeater()
 
@@ -298,12 +300,13 @@ private[spark] class Executor(
           val speed = task.context.skewTuneWorker.blocks.map(_._2.blockSize).sum.toFloat /
             (task.metrics.get.executorRunTime
             - task.metrics.get.shuffleReadMetrics.get.fetchWaitTime
-            - task.metrics.get.shuffleWriteMetrics.get.shuffleWriteTime / 1000000)
+            - task.metrics.get.shuffleWriteMetrics.get.shuffleWriteTime / 1000000 - task.context.skewTuneWorker.allIteratorWorkTime)
           skewTuneWorkerByTaskId(taskId).reportTaskComputeSpeed(if(speed > 0) speed else 0)
         }
         //9.14 SkewTuneAAdd : taskFinished移动到Executor
+        val totalTime = skewTuneWorkerByTaskId(taskId).allIteratorWorkTime
         skewTuneWorkerByTaskId(taskId).reportTaskFinished()
-        logInfo(s"task $taskId on Executor $executorId Finished")
+        logInfo(s"task $taskId on Executor $executorId Finished . IteratorTimeCost: $totalTime ms")
 
         execBackend.statusUpdate(taskId, TaskState.FINISHED, serializedResult)
 
@@ -356,7 +359,7 @@ private[spark] class Executor(
         // 就没有registerNewTask，所以找不到task，把taskFinish移动到ShuffleBlockIterator中
         /*execBackend.asInstanceOf[SkewTuneBackend].reportTaskFinished(task.context.skewTuneWorker.taskId)*/
         skewTuneWorkerByTaskId -= task.context.skewTuneWorker.taskId
-
+        logInfo(s"TaskRunner ${this.taskId}.run Finished on Executor $executorId")
       }
     }
   }

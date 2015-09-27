@@ -30,7 +30,6 @@ import org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend
 import org.apache.spark.storage.SkewTuneMaster
 import org.apache.spark.util.{Clock, SystemClock, Utils}
 
-import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet}
 import scala.math.{max, min}
 import scala.util.control.NonFatal
@@ -180,11 +179,11 @@ private[spark] class TaskSetManager(
   var emittedTaskSizeWarning = false
 
   //8.26 SkewTuneAdd 一个taskset一个master，如果全局一个master，split时会串到其他stage的task中去
-  val master = new SkewTuneMaster(this, sched.backend.asInstanceOf[CoarseGrainedSchedulerBackend].networkSpeed)
+  val master = new SkewTuneMaster(this, conf, sched.backend.asInstanceOf[CoarseGrainedSchedulerBackend].networkSpeed)
   //sbt：error:values cannot be volatile。因为volatile表示便以其不能确定岂会发生变化，与val矛盾
-  val hasSkewTuneTaskRunByExecutor = new mutable.HashMap[String, Boolean]
+  //val hasSkewTuneTaskRunByExecutor = new mutable.HashMap[String, Boolean]
   //9.28 SkewTuneAdd
-  var unlockedTaskId: Option[Long] = None
+  //var unlockedTaskId: Option[Long] = None
 
   /**
    * Add a task to all the pending-task lists that it should be on. If readding is set, we are
