@@ -21,7 +21,6 @@ import java.nio.ByteBuffer
 
 import org.apache.spark.TaskState.TaskState
 import org.apache.spark.rpc.RpcEndpointRef
-import org.apache.spark.storage.ShuffleBlockFetcherIterator.SuccessFetchResult
 import org.apache.spark.storage.{BlockId, BlockManagerId, SkewTuneBlockInfo}
 import org.apache.spark.util.{SerializableBuffer, Utils}
 
@@ -41,7 +40,7 @@ private[spark] object CoarseGrainedClusterMessages {
   case class RemoveFetchCommand(nextExecutorId: String, nextTaskId: Long, taskId: Long, allBlocks: Seq[(BlockManagerId, Seq[BlockId])])
     extends CoarseGrainedClusterMessage
 
-  case class AddFetchCommand(taskId: Long, allBlocks: Seq[(BlockManagerId, Seq[(BlockId, Long)])])
+  case class AddFetchCommand(taskId: Long, allBlocks: Seq[(BlockManagerId, Seq[(BlockId, Long)])], oldTaskId:Long)
     extends CoarseGrainedClusterMessage
 
   case class RemoveAndAddResultCommand(allBlockIds: Seq[BlockId], fromTaskId: Long, toTaskId: Long)
@@ -51,7 +50,7 @@ private[spark] object CoarseGrainedClusterMessages {
   case class RemoveResultAndAddFetchCommand(allBlockIds: Seq[BlockId], fromTaskId: Long, toTaskId: Long, nextExecutorId: String)
     extends CoarseGrainedClusterMessage
 
-  case class AddResultCommand(taskId: Long, resultInfos: Seq[(SkewTuneBlockInfo, SuccessFetchResult)],fromTaskId: Long) extends CoarseGrainedClusterMessage
+  case class AddResultCommand(taskId: Long, resultInfos: Seq[(SkewTuneBlockInfo, BlockId, ByteBuffer, Long)],fromTaskId: Long) extends CoarseGrainedClusterMessage
 
   case class RemoveResultAndAddResultCommand(allBlockIds: Seq[BlockId], fromTaskId: Long, nextTaskId: Long, nextExecutorEndpoint: RpcEndpointRef) extends CoarseGrainedClusterMessage
   //end
@@ -61,7 +60,7 @@ private[spark] object CoarseGrainedClusterMessages {
   case class UnlockTask(taskId: Long) extends CoarseGrainedClusterMessage
   //End
   //8.24 SkewTuneAdd Executor到Driver的消息
-  case class TransferRemovedFetch(nextExecutorId: String, nextTaskId: Long, returnSeq: Seq[(BlockManagerId, Seq[(BlockId, Long)])])
+  case class TransferRemovedFetch(nextExecutorId: String, nextTaskId: Long, returnSeq: Seq[(BlockManagerId, Seq[(BlockId, Long)])], fromTaskId: Long)
     extends CoarseGrainedClusterMessage
 
   /*  object TransferRemovedFetch {

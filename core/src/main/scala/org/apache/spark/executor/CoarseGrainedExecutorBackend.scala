@@ -118,16 +118,16 @@ private[spark] class CoarseGrainedExecutorBackend(
       if (worker.nonEmpty) {
         val returnSeq = worker.get.fetchIterator.removeFetchRequests(allBlocks)
         if (returnSeq.nonEmpty) {
-          transferRemovedFetch(nextExecutorId, nextTaskId, returnSeq)
+          transferRemovedFetch(nextExecutorId, nextTaskId, returnSeq, taskId)
         }
       } else
         logWarning(s"Task $taskId not exists in Executor $executorId")
 
-    case AddFetchCommand(taskId, allBlocks) =>
+    case AddFetchCommand(taskId, allBlocks,fromTaskId) =>
       val worker = executor.skewTuneWorkerByTaskId.get(taskId)
-      logInfo(s"Driver commanded a addFetch to task $taskId/${worker.get.fetchIndex} blocks $allBlocks")
+      logInfo(s"Driver commanded a addFetch from $fromTaskId to task $taskId/${worker.get.fetchIndex} blocks $allBlocks")
       if (worker.nonEmpty) {
-        worker.get.fetchIterator.addFetchRequests(allBlocks)
+        worker.get.fetchIterator.addFetchRequests(allBlocks,fromTaskId)
         logInfo(s"addFetch to task $taskId on executor $executorId .Success :　$allBlocks")
       } else
         logWarning(s"Task $taskId not exists in Executor $executorId")
@@ -153,7 +153,7 @@ private[spark] class CoarseGrainedExecutorBackend(
       if (workerFrom.nonEmpty) {
         val returnResults = workerFrom.get.fetchIterator.removeFetchResults(allBlockIds)
         if (returnResults.nonEmpty) {
-          transferRemovedFetch(nextExecutorId, nextTaskId, returnResults.groupBy(_._1.blockManagerId).mapValues(_.map(i => (i._1.blockId,i._1.blockSize))).toSeq)
+          transferRemovedFetch(nextExecutorId, nextTaskId, returnResults.groupBy(_._1.blockManagerId).mapValues(_.map(i => (i._1.blockId,i._1.blockSize))).toSeq,fromTaskId)
           logInfo(s"transfer Fetch from task $fromTaskId on executor $executorId to task $nextTaskId RemoveResultAndAddFetch :$returnResults")
         } else
           logInfo(s"transfer Fetch not exist .from task $fromTaskId/${workerFrom.get.fetchIndex} on executor $executorId to task $nextTaskId RemoveResultAndAddFetch :　$returnResults")
@@ -166,7 +166,7 @@ private[spark] class CoarseGrainedExecutorBackend(
       if (workerFrom.nonEmpty) {
         val returnResults = workerFrom.get.fetchIterator.removeFetchResults(allBlockIds)
         if (returnResults.nonEmpty) {
-          addResultToRemoteExecutor(nextExecutorEndpoint, nextTaskId, returnResults,fromTaskId)
+          addResultToRemoteExecutor(nextExecutorEndpoint, nextTaskId, returnResults.map(i => (i._1,i._2.blockId,ser.serialize(i._2),i._2.size)),fromTaskId)
           logInfo(s"transfer Result from task $fromTaskId/${workerFrom.get.fetchIndex} on executor $executorId to task $nextTaskId RemoveResultAndAddResultCommand :$returnResults")
         } else
           logInfo(s"transfer Result not exist .from task $fromTaskId/${workerFrom.get.fetchIndex} on executor $executorId to task $nextTaskId RemoveResultAndAddResultCommand :　$returnResults")
@@ -177,7 +177,7 @@ private[spark] class CoarseGrainedExecutorBackend(
       val workerTo = executor.skewTuneWorkerByTaskId.get(toTaskId)
       logInfo(s"Driver commanded a AddResultCommand from remote task $fromTaskId to task $toTaskId/${workerTo.get.fetchIndex} resultInfo ${resultInfos.map(_._1.blockId)}")
       if (workerTo.nonEmpty) {
-        workerTo.get.fetchIterator.addFetchResults(resultInfos,fromTaskId)
+        workerTo.get.fetchIterator.addFetchResults(resultInfos.map(i => (i._1, ser.deserialize[SuccessFetchResult](i._3))), fromTaskId)
         logInfo(s"add Result to task $toTaskId AddResultCommand :　${resultInfos.map(_._1.blockId)}")
       }else
         logWarning(s"Task $toTaskId not exists in Executor $executorId")
@@ -217,8 +217,8 @@ private[spark] class CoarseGrainedExecutorBackend(
   }
 
   //8.24 SkewTuneAdd Executor向Master报告
-  def transferRemovedFetch(nextExecutorId: String, nextTaskId: Long, returnSeq: Seq[(BlockManagerId, Seq[(BlockId, Long)])]): Unit = {
-    val msg = TransferRemovedFetch(nextExecutorId, nextTaskId, returnSeq)
+  def transferRemovedFetch(nextExecutorId: String, nextTaskId: Long, returnSeq: Seq[(BlockManagerId, Seq[(BlockId, Long)])], fromTaskId: Long): Unit = {
+    val msg = TransferRemovedFetch(nextExecutorId, nextTaskId, returnSeq, fromTaskId)
     logInfo(s"Executor $executorId send command removeAndAddResult $msg")
     driver match {
       case Some(driverRef) => driverRef.send(msg)
@@ -226,8 +226,8 @@ private[spark] class CoarseGrainedExecutorBackend(
     }
   }
   //9.26 
-  def addResultToRemoteExecutor(nextExecutorEndpoint: RpcEndpointRef, nextTaskId: Long, resultSeq: Seq[(SkewTuneBlockInfo, SuccessFetchResult)],fromTaskId: Long): Unit ={
-    val msg = AddResultCommand(nextTaskId, resultSeq,fromTaskId)
+  def addResultToRemoteExecutor(nextExecutorEndpoint: RpcEndpointRef, nextTaskId: Long, resultSeq: Seq[(SkewTuneBlockInfo, BlockId, ByteBuffer, Long)],fromTaskId: Long): Unit ={
+    val msg = AddResultCommand(nextTaskId, resultSeq, fromTaskId)
     logInfo(s"Executor $executorId send command addResultToRemoteExecutor $msg")
     nextExecutorEndpoint match {
       case executorRef: RpcEndpointRef => executorRef.send(msg)

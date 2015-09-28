@@ -128,14 +128,13 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         }
 
       //8.24 SkewTuneAdd : Executor到Master的消息处理
-      case TransferRemovedFetch(nextExecutorId, nextTaskId, returnSeq) =>
+      case TransferRemovedFetch(nextExecutorId, nextTaskId, returnSeq, fromTaskId) =>
         executorDataMap.get(nextExecutorId) match {
           case Some(executorInfo) =>
-            executorInfo.executorEndpoint.send(AddFetchCommand(nextTaskId, returnSeq))
+            executorInfo.executorEndpoint.send(AddFetchCommand(nextTaskId, returnSeq, fromTaskId))
           case None =>
             logWarning(s"Attempted to TransferRemovedFetch to Task $nextTaskId for unknown executor $nextExecutorId.")
         }
-
 
       case ReportBlockStatuses(taskID, seq, oldTaskId, size) =>
         //logInfo(s"Master : Received Command ReportBlockStatuses for task $taskID (to new Task $newTaskId)")
@@ -273,7 +272,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
                   demonTasks += taskId
                 }
                 logInfo(s"\ton taskSetManager ${master.taskSetManager.name}:Terminate because ActiveTasks.length < 2 or 3. TimeCost: ${System.currentTimeMillis - startTime} ms " +
-                  s"smallSizeTask $smallSizeTaskId currenetTask $taskId")
+                  s" unlock smallSizeTask $smallSizeTaskId currentTask $taskId")
             }
             master.times_compute += 1
           } else{

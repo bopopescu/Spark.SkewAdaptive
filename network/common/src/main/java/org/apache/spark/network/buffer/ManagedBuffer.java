@@ -19,6 +19,7 @@ package org.apache.spark.network.buffer;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.Serializable;
 import java.nio.ByteBuffer;
 
 /**
