@@ -14,6 +14,7 @@ private[spark] class SkewTuneWorker(val executorID: String,
                                     private val backend: SkewTuneBackend,
                                     var fetchIterator: ShuffleBlockFetcherIterator,
                                     val taskId: Long) extends Logging {
+
   val blocks = new mutable.HashMap[BlockId, SkewTuneBlockInfo]()
 
   var executorInstance: Executor = _
@@ -97,8 +98,9 @@ private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager,val conf:
   val speedRatio = conf.getDouble("spark.skewtune.speedRatio",0.5).toFloat
   val advanced = conf.getBoolean("spark.skewtune.advanced",false)
   val useResult2Fetch = conf.getBoolean("spark.skewtune.advanced.useResult2Fetch",true)
+  val interval = conf.getInt("spark.skewtune.timeInterval",100)
 
-  logInfo(s"TaskSet ${taskSetManager.name} InitMaster onlyUseSize $onlyUseSize speedRatio $speedRatio advanced $advanced useResult2Fetch $useResult2Fetch")
+  logInfo(s"TaskSet ${taskSetManager.name} InitMaster onlyUseSize $onlyUseSize speedRatio $speedRatio advanced $advanced useResult2Fetch $useResult2Fetch interbal $interval" )
 
   @deprecated
   private def costOfSchedule(blockInfo: SkewTuneBlockInfo, oldExecutor: String, newExecutor: String): Int = {
@@ -231,6 +233,7 @@ private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager,val conf:
                   firstTaskTime -= timeBySeq(Seq(block._2), taskToSplit.get.executorId)
                   val newTime = taskTime.get(task.taskId).get + timeBySeq(Seq(block._2), task.executorId)
                   taskTime.update(task.taskId, newTime)
+                  taskTime.update(taskToSplit.get.taskId,firstTaskTime)
                   maxTimeCostLine = Math.max(maxTimeCostLine, newTime.toInt)
                 }
               } else {
@@ -253,6 +256,7 @@ private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager,val conf:
                     firstTaskTime -= timeBySeq(Seq(block._2), taskToSplit.get.executorId)
                     val newTime = taskTime.get(task.taskId).get + timeBySeq(Seq(block._2), task.executorId)
                     taskTime.update(task.taskId, newTime)
+                    taskTime.update(taskToSplit.get.taskId,firstTaskTime)
                     maxTimeCostLine = Math.max(maxTimeCostLine, newTime.toInt)
                   }
                 } else {
@@ -267,6 +271,7 @@ private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager,val conf:
                     firstTaskTime -= timeBySeq(Seq(block._2), taskToSplit.get.executorId)
                     val newTime = taskTime.get(task.taskId).get + timeBySeq(Seq(block._2), task.executorId)
                     taskTime.update(task.taskId, newTime)
+                    taskTime.update(taskToSplit.get.taskId,firstTaskTime)
                     maxTimeCostLine = Math.max(maxTimeCostLine, newTime.toInt)
                   }
                 }
@@ -288,6 +293,7 @@ private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager,val conf:
                 firstTaskTime -= timeBySeq(Seq(block._2), taskToSplit.get.executorId)
                 val newTime = taskTime.get(task.taskId).get + timeBySeq(Seq(block._2), task.executorId)
                 taskTime.update(task.taskId, newTime)
+                taskTime.update(taskToSplit.get.taskId,firstTaskTime)
                 maxTimeCostLine = Math.max(maxTimeCostLine, newTime.toInt)
               }
             }

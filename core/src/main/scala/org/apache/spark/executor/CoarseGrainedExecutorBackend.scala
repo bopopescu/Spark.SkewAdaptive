@@ -28,7 +28,6 @@ import org.apache.spark.rpc._
 import org.apache.spark.scheduler.TaskDescription
 import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages._
 import org.apache.spark.serializer.SerializerInstance
-import org.apache.spark.storage.ShuffleBlockFetcherIterator.SuccessFetchResult
 import org.apache.spark.storage._
 import org.apache.spark.util.{SignalLogger, ThreadUtils, Utils}
 
@@ -140,7 +139,7 @@ private[spark] class CoarseGrainedExecutorBackend(
         val returnResults = workerFrom.get.fetchIterator.removeFetchResults(allBlockIds)
         if (returnResults.nonEmpty) {
           workerTo.get.fetchIterator.addFetchResults(returnResults, fromTaskId)
-          logInfo(s"transfer Result from task $fromTaskId/${workerFrom.get.fetchIndex} to task $toTaskId/${workerTo.get.fetchIndex} on executor $executorId RemoveAndAddResult:　$returnResults")
+          logInfo(s"transfer Result from task $fromTaskId/${workerFrom.get.fetchIndex} to task $toTaskId/${workerTo.get.fetchIndex} on executor $executorId RemoveAndAddResult:　$returnResults size ${returnResults.map(_._2.buf.size()).sum}")
         } else
           logInfo(s"transfer Result not exist from task $fromTaskId/${workerFrom.get.fetchIndex} to task $toTaskId/${workerTo.get.fetchIndex} on executor $executorId RemoveAndAddResult :　$returnResults")
       } else
@@ -160,7 +159,7 @@ private[spark] class CoarseGrainedExecutorBackend(
       }else
         logWarning(s"Task $fromTaskId not exists in Executor $executorId")
 
-    case RemoveResultAndAddResultCommand(allBlockIds, fromTaskId, nextTaskId, nextExecutorEndpoint) =>
+    /*case RemoveResultAndAddResultCommand(allBlockIds, fromTaskId, nextTaskId, nextExecutorEndpoint) =>
       val workerFrom = executor.skewTuneWorkerByTaskId.get(fromTaskId)
       logInfo(s"Driver commanded a RemoveResultAndAddResultCommand from task $fromTaskId/${workerFrom.get.fetchIndex} to task $nextTaskId blocks $allBlockIds")
       if (workerFrom.nonEmpty) {
@@ -180,24 +179,25 @@ private[spark] class CoarseGrainedExecutorBackend(
         workerTo.get.fetchIterator.addFetchResults(resultInfos.map(i => (i._1, ser.deserialize[SuccessFetchResult](i._3))), fromTaskId)
         logInfo(s"add Result to task $toTaskId AddResultCommand :　${resultInfos.map(_._1.blockId)}")
       }else
-        logWarning(s"Task $toTaskId not exists in Executor $executorId")
+        logWarning(s"Task $toTaskId not exists in Executor $executorId")*/
     //End
       
-    case LockTask(taskId) =>
+   /* case LockTask(taskId) =>
       val worker = executor.skewTuneWorkerByTaskId.get(taskId)
       logInfo(s"Driver commanded a LockTask $taskId/${worker.get.fetchIndex}")
       if(worker.isDefined && worker.get.fetchIterator != null && !worker.get.fetchIterator.needLock){
         worker.get.fetchIterator.needLock = true
         /*if(executor..isDefinedAt(taskId) && !executor.taskLockStatus(taskId))
           executor.taskLockStatus.update(taskId, true)*/
-      }
+      }*/
 
-    case UnlockTask(taskId) =>
+    case UnlockTask(taskId,fetchIndex) =>
       val worker = executor.skewTuneWorkerByTaskId.get(taskId)
-      logInfo(s"Driver commanded a UnLockTask $taskId/${worker.get.fetchIndex} fetchIterator ${worker.get.fetchIterator} locked ${worker.get.fetchIterator.needLock}")
+      logInfo(s"Driver commanded a UnLockTask $taskId/$fetchIndex(current:${worker.get.fetchIndex}}) fetchIterator ${worker.get.fetchIterator} locked ${worker.get.fetchIterator.needLock}")
       if(worker.isDefined) {
-        if (worker.get.fetchIterator != null) {
-          if (worker.get.fetchIterator.needLock) {
+        executor.unlockCommands += ((taskId, fetchIndex))
+        if (fetchIndex == worker.get.fetchIndex) {
+          if (worker.get.fetchIterator != null && worker.get.fetchIterator.needLock) {
             worker.get.fetchIterator.needLock = false
             /*if(executor.taskLockStatus.isDefinedAt(taskId))
             executor.taskLockStatus.update(taskId, false)*/
@@ -209,9 +209,6 @@ private[spark] class CoarseGrainedExecutorBackend(
               worker.get.fetchIterator.isLocked = false
             }
           }
-        }else{
-          logInfo(s"UnLockTask $taskId . worker.get.fetchIterator == null . cache Unlock")
-          executor.unlockCommandCache += taskId
         }
       }
   }

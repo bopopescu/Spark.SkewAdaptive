@@ -171,9 +171,9 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         //if(fetchIndex > master.maxFetchIndex) {
         logInfo(s"[&] on taskSetManager ${master.taskSetManager.name}: taskId: $taskId reportNextIterator $fetchIndex")
         if(!master.demonTasks.contains(taskId)) {
-          executorDataMap(scheduler.taskIdToExecutorId(taskId)).executorEndpoint.send(UnlockTask(taskId))
+          executorDataMap(scheduler.taskIdToExecutorId(taskId)).executorEndpoint.send(UnlockTask(taskId,fetchIndex))
           master.nextTaskRunningOrFinished += 1
-          logInfo(s"[&] on taskSetManager ${master.taskSetManager.name}: UnLock task $taskId index $fetchIndex")
+          logInfo(s"[&] on taskSetManager ${master.taskSetManager.name}: UnLock task $taskId/$fetchIndex")
         }
         //}
         master.maxFetchIndex = Math.max(master.maxFetchIndex,fetchIndex)
@@ -229,10 +229,11 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
               }
             }*/
             val startTime = System.currentTimeMillis()
-
+            var smallSizeTaskIdOp: Option[Long] = None
             val commandsOption = master.computerAndSplit(isLastTask , schedulerBackend = schedulerBackendInstance)
             commandsOption match {
               case Some((fetchCommands, resultCommands,result2FetchCommands,result2ResultCommands,smallSizeTaskId)) =>
+                smallSizeTaskIdOp = Some(smallSizeTaskId)
                 for (command <- fetchCommands if scheduler.taskIdToExecutorId.contains(command.taskId)) {
                   executorDataMap(scheduler.taskIdToExecutorId(command.taskId)).executorEndpoint.send(command)
                 }
@@ -249,40 +250,42 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
                   }
                 }
                 logInfo(s"\ton taskSetManager ${master.taskSetManager.name}:Valid SkewTuneSplit. TimeCost: ${System.currentTimeMillis - startTime} ms")
-                //9.26 lastTask时不再unlock
-                if(!isLastTask) {
-                  //9.23 最先完成的task可以被unlock了，分为当前task是新task还是之前被lock的task两种情况
-                  if (smallSizeTaskId == taskId && !demonTasks.contains(smallSizeTaskId)) {
-                    executorDataMap(scheduler.taskIdToExecutorId(smallSizeTaskId)).executorEndpoint.send(UnlockTask(smallSizeTaskId))
-                    logInfo(s"\ton taskSetManager ${master.taskSetManager.name}: to Unlock smallest size self task $smallSizeTaskId/${master.currentFetchIndex} ")
-                  } else if (demonTasks.contains(smallSizeTaskId)) {
-                    executorDataMap(scheduler.taskIdToExecutorId(smallSizeTaskId)).executorEndpoint.send(UnlockTask(smallSizeTaskId))
-                    demonTasks -= smallSizeTaskId
-                    demonTasks += taskId
-                    logInfo(s"\ton taskSetManager ${master.taskSetManager.name}: to Unlock smallest size task $smallSizeTaskId/${master.currentFetchIndex}  ")
-                  } else
-                    logInfo(s"\ton taskSetManager ${master.taskSetManager.name}: no need to unlock for demonTask.size = ${demonTasks.size}")
-                }
 
               case None =>
-                val smallSizeTaskId = master.getMinSizeTaskId
-                executorDataMap(scheduler.taskIdToExecutorId(smallSizeTaskId)).executorEndpoint.send(UnlockTask(smallSizeTaskId))
-                if(smallSizeTaskId != taskId) {
+                logInfo(s"\ton taskSetManager ${master.taskSetManager.name}:Terminate because ActiveTasks.length < 2 or 3. TimeCost: ${System.currentTimeMillis - startTime} ms ")
+            }
+            //9.26 lastTask时不再unlock
+            if(!isLastTask) {
+              //9.23 最先完成的task可以被unlock了，分为当前task是新task还是之前被lock的task两种情况
+              val smallSizeTaskId = if(smallSizeTaskIdOp.isDefined) smallSizeTaskIdOp.get else master.getMinSizeTaskId
+              logInfo(s"\ton taskSetManager ${master.taskSetManager.name}: smallest size task $smallSizeTaskId/${master.currentFetchIndex} task $taskId")
+              if(demonTasks.size < availableMaxTaskNumberConcurrent - 1) {
+                if (taskId != smallSizeTaskId)
+                  demonTasks += taskId
+              }
+              else{
+                executorDataMap(scheduler.taskIdToExecutorId(smallSizeTaskId)).executorEndpoint.send(UnlockTask(smallSizeTaskId,master.currentFetchIndex))
+                logInfo(s"\ton taskSetManager ${master.taskSetManager.name}: to Unlock smallest size task $smallSizeTaskId/${master.currentFetchIndex} ")
+                if (smallSizeTaskId != taskId) {
                   demonTasks -= smallSizeTaskId
                   demonTasks += taskId
                 }
-                logInfo(s"\ton taskSetManager ${master.taskSetManager.name}:Terminate because ActiveTasks.length < 2 or 3. TimeCost: ${System.currentTimeMillis - startTime} ms " +
-                  s" unlock smallSizeTask $smallSizeTaskId currentTask $taskId")
+              }
             }
             master.times_compute += 1
           } else{
-            logInfo(s"\ton taskSetManager ${master.taskSetManager.name}: demonTask.size before = $demonTasks ,maxSize = ${availableMaxTaskNumberConcurrent-1}")
+            logInfo(s"\ton taskSetManager ${master.taskSetManager.name}: demonTask $demonTasks maxSize = ${availableMaxTaskNumberConcurrent-1}")
             if(demonTasks.size < availableMaxTaskNumberConcurrent -1 ) {
               demonTasks += taskId
             }
           }
           if(isLastTask) {
-            master.activeTasks.keySet.foreach(id => executorDataMap(scheduler.taskIdToExecutorId(id)).executorEndpoint.send(UnlockTask(id)))
+            master.activeTasks.keySet.foreach(id =>
+              {
+                if(master.currentFetchIndex == master.maxFetchIndex && master.interval > 0)
+                  Thread.sleep(master.interval)
+                executorDataMap(scheduler.taskIdToExecutorId(id)).executorEndpoint.send(UnlockTask(id,master.currentFetchIndex))
+              })
             logInfo(s"[LastTask] on taskSetManager ${master.taskSetManager.name}: UnLock Remaining Tasks ${master.activeTasks.keySet}")
             if(master.currentFetchIndex < master.maxFetchIndex) {
               //9.25 SkewTuneAdd 前一个Lock阶段的最后一个Task时，重新初始化Master中变量
@@ -304,6 +307,11 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
             }
           }
           master.overhead_compute += System.currentTimeMillis() - time
+          //9.29
+          if(master.currentFetchIndex == master.maxFetchIndex && isLastTask) {
+            logInfo(s"[LastTask2] on taskSetManager ${master.taskSetManager.name}: UnLock Remaining Tasks ${master.activeTasks.keySet}")
+            master.activeTasks.keySet.toList.reverse.foreach(id => executorDataMap(scheduler.taskIdToExecutorId(id)).executorEndpoint.send(UnlockTask(id, master.currentFetchIndex)))
+          }
           //hasSkewTuneTaskRunByExecutor(executorId) = true
           assert(demonTasks.size <= availableMaxTaskNumberConcurrent - 1 )
         }else{

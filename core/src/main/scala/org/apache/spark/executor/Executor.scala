@@ -121,6 +121,8 @@ private[spark] class Executor(
   //val taskLockStatus = new mutable.HashMap[Long,Boolean]()
   //9.26
   val unlockCommandCache = new mutable.HashSet[Long]()
+  //9.29
+  val unlockCommands = new mutable.HashSet[(Long,Int)]()
 
   startDriverHeartbeater()
 

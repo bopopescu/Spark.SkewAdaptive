@@ -57,7 +57,7 @@ private[spark] object CoarseGrainedClusterMessages {
 
   case class LockTask(taskId: Long) extends CoarseGrainedClusterMessage
 
-  case class UnlockTask(taskId: Long) extends CoarseGrainedClusterMessage
+  case class UnlockTask(taskId: Long,fetchIndex:Int) extends CoarseGrainedClusterMessage
   //End
   //8.24 SkewTuneAdd Executor到Driver的消息
   case class TransferRemovedFetch(nextExecutorId: String, nextTaskId: Long, returnSeq: Seq[(BlockManagerId, Seq[(BlockId, Long)])], fromTaskId: Long)
