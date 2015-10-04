@@ -141,6 +141,21 @@ final class ShuffleBlockFetcherIterator(
     s"LocalBlocks : $localBlocks (${blocksByAddress.filter(_._1 == blockManager.blockManagerId.executorId).flatMap(_._2.map(_._2)).sum}})\n" +
     s"RemoteBlocks : $remoteBlocks (${blocksByAddress.filterNot(_._1 == blockManager.blockManagerId.executorId).flatMap(_._2.map(_._2)).sum}})")
 
+  //10.4
+  def newUnlock(): Unit ={
+    if(needLock){
+      logInfo(s"\ttask ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}。" +
+        s"NewUnlock numBlocksProcessed $numBlocksProcessed numBlocksToFetch $numBlocksToFetch")
+      numBlocksToFetch -= 1
+      needLock = false
+      if(isLocked) {
+        numBlocksProcessed -= 1
+        results.add(EmptyFetchResult(null))
+        logInfo(s"\ttask ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}。" +
+        s"NewUnlock put empty result")
+      }
+    }
+  }
   //8.19 Master处传来的指令可能与Worker端的实际情况不同步，
   // 在函数内部判断如果状态不同步，就跳过执行了，
   // removeFetchRequests需要返回真实已移除的序列给Master， 再传给addFetchRequests，否则两个Task就可能会发出相同的FetchRequest
@@ -294,12 +309,12 @@ final class ShuffleBlockFetcherIterator(
       logInfo(s"addResultTime ${System.currentTimeMillis() - time} ms Origin Size $originSize toAddSize ${tmpResultQueue.size}")*/
 
       numBlocksToFetch += totalBlocksToAdd
-      if(needLock && isLocked) {
+      /*if(needLock && isLocked) {
         synchronized {
           this.notifyAll()
         }
         logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}. notifyAll Locked(addFetchResults) needLock $needLock isLocked $isLocked numBlockToFetch $numBlocksToFetch")
-      }
+      }*/
     //}
     //8.23 向Master报告block Status，只在add时需要报告，remove时不需要
     //9.26 bugFix 把Some(worker.taskId) -> fromTaskId
@@ -398,12 +413,12 @@ final class ShuffleBlockFetcherIterator(
             results.put(new SuccessFetchResult(BlockId(blockId), sizeMap(blockId), buf))
 
             if (worker.blocks.contains(BlockId(blockId))) {
-              if (needLock && isLocked) {
+              /*if (needLock && isLocked) {
                 worker.fetchIterator.synchronized {
                   worker.fetchIterator.notifyAll()
                 }
                 logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}. notifyAll Locked(onBlockFetchSuccess) needLock $needLock isLocked $isLocked numBlockToFetch $numBlocksToFetch")
-              }
+              }*/
               logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId} 。onBlockFetchSuccess $blockId")
               //9.1 SkewTuneAdd 记录executor到executor的下载网速
               val downloadTimeCost = System.currentTimeMillis() - downloadStartTime
@@ -507,10 +522,10 @@ final class ShuffleBlockFetcherIterator(
   private[this] def fetchLocalBlocks() {
     val iter = localBlocks.iterator
     //10.4
-    var needNotify = false
+    //var needNotify = false
     while (iter.hasNext) {
       //10.4
-      needNotify = needLock && isLocked
+      //needNotify = needLock && isLocked
       val blockId = iter.next()
       try {
         val buf = blockManager.getBlockData(blockId)
@@ -528,12 +543,12 @@ final class ShuffleBlockFetcherIterator(
           return
       }
     }
-    if(needNotify){
+    /*if(needNotify){
       synchronized {
         notifyAll()
       }
       logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}. notifyAll Locked(fetchLocalBlocks) needLock $needLock isLocked $isLocked numBlockToFetch $numBlocksToFetch")
-    }
+    }*/
   }
 
   private[this] def initialize(): Unit = {
@@ -590,12 +605,15 @@ final class ShuffleBlockFetcherIterator(
       if(executorInstance.unlockCommands.contains((worker.taskId,worker.fetchIndex))){
         logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}. found Unlock Command Cached")
         needLock = false
-        if(isLocked) {
+        /*if(isLocked) {
           synchronized {
             this.notifyAll()
           }
           logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}. notifyAll Locked(initialize) needLock $needLock isLocked $isLocked numBlockToFetch $numBlocksToFetch")
-        }
+        }*/
+      }else{
+        //10.4 SkewTuneAdd 最后会lock iterator
+        numBlocksToFetch += 1
       }
       //8.23 SkewTuneAdd 向Master报告TaskStart，把task所属的blocks注册上去
       if(!isTaskRegistered)
@@ -606,7 +624,7 @@ final class ShuffleBlockFetcherIterator(
 
   override def hasNext: Boolean = {
     //9.18 SKewTuneLock
-    var r = numBlocksProcessed < numBlocksToFetch
+    /*var r = numBlocksProcessed < numBlocksToFetch
     //isLocked = if(taskLockStatus(taskId) == isLocked) isLocked else taskLockStatus(taskId)
     logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId} " +
       s"numBlocksProcessed: $numBlocksProcessed numBlocksToFetch: $numBlocksToFetch needLock $needLock isLocked $isLocked")
@@ -625,7 +643,8 @@ final class ShuffleBlockFetcherIterator(
       logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}. resume from Locked needLock $needLock isLocked $isLocked numBlockToFetch $numBlocksToFetch")
       r = numBlocksProcessed < numBlocksToFetch
     }
-    r
+    r*/
+    numBlocksProcessed < numBlocksToFetch
   }
 
   //8.5 怎么会返回Try[Iterator[Any]]? 【知识点：Scala函数式的异常处理类Try,Success,Failure，及其map/flatMap】
@@ -637,10 +656,12 @@ final class ShuffleBlockFetcherIterator(
   override def next(): (BlockId, Try[Iterator[Any]]) = {
     numBlocksProcessed += 1
     val startFetchWait = System.currentTimeMillis()
+    logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}. Take Start numBlocksProcessed: $numBlocksProcessed numBlocksToFetch: $numBlocksToFetch needLock $needLock isLocked $isLocked")
+    isLocked = true
     currentResult = results.take()
-    logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}. Take Start")
+    isLocked = false
+    logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}. Take End numBlocksProcessed: $numBlocksProcessed numBlocksToFetch: $numBlocksToFetch needLock $needLock isLocked $isLocked")
     val result = currentResult
-    logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}. wait End")
     val stopFetchWait = System.currentTimeMillis()
     shuffleMetrics.incFetchWaitTime(stopFetchWait - startFetchWait)
 
@@ -659,9 +680,16 @@ final class ShuffleBlockFetcherIterator(
       worker.reportBlockStatuses(reportToMasterCache)
       reportToMasterCache.clear()
     }
+
     val iteratorTry: Try[Iterator[Any]] = result match {
       case FailureFetchResult(_, e) =>
         Failure(e)
+
+      //10.4
+      case EmptyFetchResult(_) =>
+        logInfo(s"task ${worker.taskId}/${worker.fetchIndex} on Executor ${blockManager.blockManagerId.executorId} Recieve EmptyResult for Unlock")
+        Try(Array[(Any,Any)]().toIterator)
+
       //8.7 ???? size这个参数有什么用，只和maxBytesInFlight有关?
       // 每个shuffleBlock都包含下一步待处理的所有partition的record，难道把所有内容都拉下来?
       // 但是一个ShuffleMapTask只处理一个partition的record?
@@ -683,7 +711,7 @@ final class ShuffleBlockFetcherIterator(
               blockNumber += 1
             }
           } else {
-            logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}。\n" +
+            logInfo(s"task ${worker.taskId}/${worker.fetchIndex} on Executor ${blockManager.blockManagerId.executorId}。\n" +
               s"Task Finish with BlockNumber $blockNumber and Size ${shuffleMetrics.localBytesRead} processed.\n" +
               s"TaskShuffleReadMetrics: local ${shuffleMetrics.localBytesRead}")
           }
@@ -750,6 +778,10 @@ object ShuffleBlockFetcherIterator {
    * @param e the failure exception
    */
   private[spark] case class FailureFetchResult(blockId: BlockId, e: Throwable)
+    extends FetchResult
+
+  //10.4
+  private[spark] case class EmptyFetchResult(blockId: BlockId)
     extends FetchResult
 
 }

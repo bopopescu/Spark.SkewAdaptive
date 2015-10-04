@@ -162,10 +162,10 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         if(master.demonTasks.contains(taskID))
           master.demonTasks -= taskID
         //9.29
-        if(master.isLastTask && master.currentFetchIndex == master.maxFetchIndex){
+        /*if(master.isLastTask && master.currentFetchIndex == master.maxFetchIndex){
           logInfo(s"[LastTask2] on taskSetManager ${master.taskSetManager.name}: When Other Task Finished . UnLock Remaining Tasks ${master.activeTasks.keySet}")
           master.activeTasks.keySet.foreach(id => executorDataMap(scheduler.taskIdToExecutorId(id)).executorEndpoint.send(UnlockTask(id, master.currentFetchIndex)))
-        }
+        }*/
         master.overhead_communicate += System.currentTimeMillis() - time
         master.times_communicate += 1
 

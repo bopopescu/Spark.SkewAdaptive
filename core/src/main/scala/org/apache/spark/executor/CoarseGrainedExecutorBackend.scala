@@ -205,21 +205,23 @@ private[spark] class CoarseGrainedExecutorBackend(
 
     case UnlockTask(taskId,fetchIndex) =>
       val worker = executor.skewTuneWorkerByTaskId.get(taskId)
-      logInfo(s"Driver commanded a UnLockTask $taskId/$fetchIndex(current:${worker.get.fetchIndex}}) fetchIterator ${worker.get.fetchIterator} locked ${worker.get.fetchIterator.needLock}")
       if(worker.isDefined) {
+        logInfo(s"Driver commanded a UnLockTask $taskId/$fetchIndex(current:${worker.get.fetchIndex}}) fetchIterator ${worker.get.fetchIterator} locked ${worker.get.fetchIterator.needLock} isLocked ${worker.get.fetchIterator.isLocked}")
         executor.unlockCommands += ((taskId, fetchIndex))
         if (fetchIndex == worker.get.fetchIndex) {
-          if (worker.get.fetchIterator != null && worker.get.fetchIterator.needLock) {
-            worker.get.fetchIterator.needLock = false
+          if (worker.get.fetchIterator != null) {
             /*if(executor.taskLockStatus.isDefinedAt(taskId))
             executor.taskLockStatus.update(taskId, false)*/
-            if (worker.get.fetchIterator.isLocked) {
+            /*if (worker.get.fetchIterator.isLocked) {
               logInfo(s"ExecutorBackend commanded a UnLockTask $taskId to notify")
               worker.get.fetchIterator.synchronized {
                 worker.get.fetchIterator.notifyAll()
               }
               worker.get.fetchIterator.isLocked = false
-            }
+            }*/
+            //10.4
+            logInfo(s"ExecutorBackend commanded a UnLockTask $taskId to notify")
+            worker.get.fetchIterator.newUnlock()
           }
         }
       }
