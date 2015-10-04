@@ -161,6 +161,11 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         //9.19
         if(master.demonTasks.contains(taskID))
           master.demonTasks -= taskID
+        //9.29
+        if(master.isLastTask && master.currentFetchIndex == master.maxFetchIndex){
+          logInfo(s"[LastTask2] on taskSetManager ${master.taskSetManager.name}: When Other Task Finished . UnLock Remaining Tasks ${master.activeTasks.keySet}")
+          master.activeTasks.keySet.foreach(id => executorDataMap(scheduler.taskIdToExecutorId(id)).executorEndpoint.send(UnlockTask(id, master.currentFetchIndex)))
+        }
         master.overhead_communicate += System.currentTimeMillis() - time
         master.times_communicate += 1
 
@@ -198,6 +203,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           val taskset = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskId))
           //9.19 SkewTuneAdd
           val isLastTask = master.taskFinishedOrRunning == taskset.tasks.length
+          master.isLastTask = isLastTask
           logInfo(s"on taskSetManager ${master.taskSetManager.name}: taskId: $taskId isLastTask $isLastTask fetchIndex ${master.currentFetchIndex} ,runningorFinished: ${master.taskFinishedOrRunning} taskSize: ${taskset.tasks.length}")
           master.overhead_communicate += System.currentTimeMillis() - time
           master.times_communicate += 1
@@ -232,13 +238,19 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
             var smallSizeTaskIdOp: Option[Long] = None
             val commandsOption = master.computerAndSplit(isLastTask , schedulerBackend = schedulerBackendInstance)
             commandsOption match {
-              case Some((fetchCommands, resultCommands,result2FetchCommands,result2ResultCommands,smallSizeTaskId)) =>
+              case Some((fetchCommands, resultCommands,fetchingCommands, result2FetchCommands,result2ResultCommands,smallSizeTaskId)) =>
                 smallSizeTaskIdOp = Some(smallSizeTaskId)
                 for (command <- fetchCommands if scheduler.taskIdToExecutorId.contains(command.taskId)) {
                   executorDataMap(scheduler.taskIdToExecutorId(command.taskId)).executorEndpoint.send(command)
                 }
                 for (command <- resultCommands if scheduler.taskIdToExecutorId.contains(command.fromTaskId)) {
                   executorDataMap(scheduler.taskIdToExecutorId(command.fromTaskId)).executorEndpoint.send(command)
+                }
+                //9.30
+                if(master.transferFetchingBlocks){
+                  for (command <- fetchingCommands if scheduler.taskIdToExecutorId.contains(command.taskId)) {
+                    executorDataMap(scheduler.taskIdToExecutorId(command.taskId)).executorEndpoint.send(command)
+                  }
                 }
                 //9.26
                 if(master.advanced) {
@@ -307,11 +319,6 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
             }
           }
           master.overhead_compute += System.currentTimeMillis() - time
-          //9.29
-          if(master.currentFetchIndex == master.maxFetchIndex && isLastTask) {
-            logInfo(s"[LastTask2] on taskSetManager ${master.taskSetManager.name}: UnLock Remaining Tasks ${master.activeTasks.keySet}")
-            master.activeTasks.keySet.toList.reverse.foreach(id => executorDataMap(scheduler.taskIdToExecutorId(id)).executorEndpoint.send(UnlockTask(id, master.currentFetchIndex)))
-          }
           //hasSkewTuneTaskRunByExecutor(executorId) = true
           assert(demonTasks.size <= availableMaxTaskNumberConcurrent - 1 )
         }else{

@@ -109,6 +109,18 @@ private[spark] class CoarseGrainedExecutorBackend(
       executor.stop()
       stop()
       rpcEnv.shutdown()
+      
+    //9.30 SkewTuneAdd 支持fetching状态转移
+    case RemoveFetchingCommand(nextExecutorId, nextTaskId, taskId, allBlocks) =>
+      val worker = executor.skewTuneWorkerByTaskId.get(taskId)
+      logInfo(s"Driver commanded a RemoveFetchWaitingCommand from $taskId/${worker.get.fetchIndex} to $nextTaskId on Executor $nextExecutorId blocks ${allBlocks}")
+      if (worker.nonEmpty) {
+        val returnSeq = worker.get.fetchIterator.removeFetchingRequests(allBlocks)
+        if (returnSeq.nonEmpty) {
+          transferRemovedFetch(nextExecutorId, nextTaskId, returnSeq, taskId)
+        }
+      } else
+        logWarning(s"Task $taskId not exists in Executor $executorId")
 
     //8.24 SkewTuneAdd : Master向Executor发送Message
     case RemoveFetchCommand(nextExecutorId, nextTaskId, taskId, allBlocks) =>

@@ -36,6 +36,9 @@ private[spark] object CoarseGrainedClusterMessages {
   case class KillTask(taskId: Long, executor: String, interruptThread: Boolean)
     extends CoarseGrainedClusterMessage
 
+  //9.30
+  case class RemoveFetchingCommand(nextExecutorId: String, nextTaskId: Long, taskId: Long, allBlocks: Seq[BlockId]) extends CoarseGrainedClusterMessage
+
   //8.24 SkewTuneAdd Driver到Executor的消息
   case class RemoveFetchCommand(nextExecutorId: String, nextTaskId: Long, taskId: Long, allBlocks: Seq[(BlockManagerId, Seq[BlockId])])
     extends CoarseGrainedClusterMessage

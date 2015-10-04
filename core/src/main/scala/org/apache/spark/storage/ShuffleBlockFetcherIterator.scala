@@ -130,6 +130,7 @@ final class ShuffleBlockFetcherIterator(
   //9.25
   @volatile var isLocked = false
   var blockNumber = 0
+  val cancelFetching = new ArrayBuffer[BlockId]()
   //9.26
   //var totalTime = 0L
 
@@ -226,7 +227,7 @@ final class ShuffleBlockFetcherIterator(
           val tmpBlocksRemove = new ArrayBuffer[(BlockId, Long)]
           for ((blockId, size) <- request.blocks if blockToRemove._2.contains(blockId)
             && worker.blocks.contains(blockId)
-            && worker.blocks(blockId).blockState == SkewTuneBlockStatus.REMOTE_FETCH_WAITING) {
+            && (worker.blocks(blockId).blockState == SkewTuneBlockStatus.REMOTE_FETCH_WAITING)) {
             tmpBlocksLeft -= ((blockId, size))
             tmpBlocksRemove += ((blockId, size))
           }
@@ -244,6 +245,16 @@ final class ShuffleBlockFetcherIterator(
     //logInfo(s"ShuffleBlockFetchIterator on Executor ${blockManager.blockManagerId.executorId}。removeFetchRequests ： $returnResults")
     returnResults
   }
+  //9.30
+  def removeFetchingRequests(blocksToRemove: Seq[BlockId]):  Seq[(BlockManagerId, Seq[(BlockId, Long)])] = {
+    val blocksActualRemove = new ArrayBuffer[(BlockManagerId,BlockId,Long)]()
+    for(blockId <- blocksToRemove if worker.blocks.contains(blockId) && worker.blocks(blockId).blockState == SkewTuneBlockStatus.REMOTE_FETCHING){
+      val blockInfo = worker.blocks(blockId)
+      blocksActualRemove += ((blockInfo.blockManagerId,blockId,blockInfo.blockSize))
+      cancelFetching += blockId
+    }
+    blocksActualRemove.groupBy(_._1).mapValues(seq => seq.map(i => (i._2,i._3))).toSeq
+  }
 
   //8.19 同理Woker和Master因为信息不同步，需要Worker自己做正确性检查：removeFetchResults必须返回真实的已移除序列。
   // 区别在于这两个函数都在一个Executor上执行
@@ -253,7 +264,7 @@ final class ShuffleBlockFetcherIterator(
       .map(_.asInstanceOf[SuccessFetchResult].blockId)
     val tmpResultsToAdd: Seq[BlockId] = resultsToAdd.map(_._2.blockId)
     val updateCache = new ArrayBuffer[(BlockId, Byte, Long)]()
-    val tmpResultQueue = ArrayBuffer[FetchResult]()
+    //val tmpResultQueue = ArrayBuffer[FetchResult]()
     //this.synchronized {
       resultsToAdd.filter(_._1.blockSize > 0).foreach(resultInfo => {
         val notExist = tmpResults.forall(tmpResultsToAdd.contains(_) == false)
@@ -283,10 +294,12 @@ final class ShuffleBlockFetcherIterator(
       logInfo(s"addResultTime ${System.currentTimeMillis() - time} ms Origin Size $originSize toAddSize ${tmpResultQueue.size}")*/
 
       numBlocksToFetch += totalBlocksToAdd
-      if(needLock && isLocked)
+      if(needLock && isLocked) {
         synchronized {
           this.notifyAll()
         }
+        logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}. notifyAll Locked(addFetchResults) needLock $needLock isLocked $isLocked numBlockToFetch $numBlocksToFetch")
+      }
     //}
     //8.23 向Master报告block Status，只在add时需要报告，remove时不需要
     //9.26 bugFix 把Some(worker.taskId) -> fromTaskId
@@ -376,14 +389,22 @@ final class ShuffleBlockFetcherIterator(
             // Increment the ref count because we need to pass this to a different thread.
             // This needs to be released after use.
             buf.retain()
+            //9.29
+            if(cancelFetching.contains(BlockId(blockId))) {
+              logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId} 。cancelFetch $blockId size ${buf.size()}")
+              cancelFetching -= BlockId(blockId)
+              return
+            }
             results.put(new SuccessFetchResult(BlockId(blockId), sizeMap(blockId), buf))
 
             if (worker.blocks.contains(BlockId(blockId))) {
-              if (needLock && isLocked)
-                synchronized {
-                  this.notifyAll()
+              if (needLock && isLocked) {
+                worker.fetchIterator.synchronized {
+                  worker.fetchIterator.notifyAll()
                 }
-              logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId} 。onBlockFetchSuccess ${blockId}")
+                logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}. notifyAll Locked(onBlockFetchSuccess) needLock $needLock isLocked $isLocked numBlockToFetch $numBlocksToFetch")
+              }
+              logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId} 。onBlockFetchSuccess $blockId")
               //9.1 SkewTuneAdd 记录executor到executor的下载网速
               val downloadTimeCost = System.currentTimeMillis() - downloadStartTime
               worker.reportBlockDownloadSpeed(worker.blocks(BlockId(blockId)).blockManagerId.executorId,
@@ -485,7 +506,11 @@ final class ShuffleBlockFetcherIterator(
    */
   private[this] def fetchLocalBlocks() {
     val iter = localBlocks.iterator
+    //10.4
+    var needNotify = false
     while (iter.hasNext) {
+      //10.4
+      needNotify = needLock && isLocked
       val blockId = iter.next()
       try {
         val buf = blockManager.getBlockData(blockId)
@@ -502,6 +527,12 @@ final class ShuffleBlockFetcherIterator(
           results.put(new FailureFetchResult(blockId, e))
           return
       }
+    }
+    if(needNotify){
+      synchronized {
+        notifyAll()
+      }
+      logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}. notifyAll Locked(fetchLocalBlocks) needLock $needLock isLocked $isLocked numBlockToFetch $numBlocksToFetch")
     }
   }
 
@@ -539,7 +570,7 @@ final class ShuffleBlockFetcherIterator(
     fetchLocalBlocks()
     logDebug("Got local blocks in " + Utils.getUsedTimeMs(startTime))
 
-    synchronized{
+    //synchronized{
       //8.21 SkewTuneAdd 本地BLocks Fetch后
       worker.blocks ++= results.toArray.filter(_.isInstanceOf[SuccessFetchResult]).map(result => {
         val tmp = result.asInstanceOf[SuccessFetchResult]
@@ -558,17 +589,19 @@ final class ShuffleBlockFetcherIterator(
       //9.26
       if(executorInstance.unlockCommands.contains((worker.taskId,worker.fetchIndex))){
         logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}. found Unlock Command Cached")
-        this.needLock = false
-        if(this.isLocked)
-          synchronized{
+        needLock = false
+        if(isLocked) {
+          synchronized {
             this.notifyAll()
           }
+          logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}. notifyAll Locked(initialize) needLock $needLock isLocked $isLocked numBlockToFetch $numBlocksToFetch")
+        }
       }
       //8.23 SkewTuneAdd 向Master报告TaskStart，把task所属的blocks注册上去
       if(!isTaskRegistered)
         worker.registerNewTask(worker.blocks.values.toArray[SkewTuneBlockInfo]) //8.30 Error ERROR ErrorMonitor: Transient association error,HaspMap.values.toSeq:Stream不能序列化
       isTaskRegistered = true
-    }
+    //}
   }
 
   override def hasNext: Boolean = {
@@ -577,16 +610,19 @@ final class ShuffleBlockFetcherIterator(
     //isLocked = if(taskLockStatus(taskId) == isLocked) isLocked else taskLockStatus(taskId)
     logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId} " +
       s"numBlocksProcessed: $numBlocksProcessed numBlocksToFetch: $numBlocksToFetch needLock $needLock isLocked $isLocked")
+    //9.30
+    isLocked = if(executorInstance.unlockCommands.contains((worker.taskId, worker.fetchIndex))) false else isLocked
     //9.25 SkewTuneAdd 增加了isLocked状态，防止重复wait()
     if (!r && needLock && !isLocked) {
       synchronized {
-        logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}. wait because Locked needLock $needLock isLocked $isLocked")
+        logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}. wait because Locked needLock $needLock isLocked $isLocked numBlockToFetch $numBlocksToFetch")
         isLocked = true
         //9.25 ??? task11/0，10-10时触发了hasNext两次，然后ExecutorBackend的receive()不能进入unlockTask分支，但Akka收到了消息，
         // 为什么会触发两次，为什么会进不了分支？
         this.wait()
       }
-      logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}. resume from Locked needLock $needLock isLocked $isLocked")
+      isLocked = false
+      logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}. resume from Locked needLock $needLock isLocked $isLocked numBlockToFetch $numBlocksToFetch")
       r = numBlocksProcessed < numBlocksToFetch
     }
     r

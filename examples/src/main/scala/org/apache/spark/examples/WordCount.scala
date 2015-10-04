@@ -8,7 +8,7 @@ object WordCount {
   def main(args: Array[String]) {
 
     if (args.length < 1) {
-      System.err.println("Usage: <file>")
+      System.err.println("Usage: <file> <partitionNumber>")
       System.exit(1)
     }
 
@@ -18,9 +18,9 @@ object WordCount {
     val line = sc.textFile(args(0))
 
     if(partitionNumber==0)
-      line.flatMap(_.split(" ")).map((_, 1)).reduceByKey(_ + _).collect()
+      line.flatMap(_.split(" ")).map((_, 1)).reduceByKey(_ + _).map(_._2).count()
     else
-      line.flatMap(_.split(" ")).map((_, 1)).reduceByKey(_ + _,partitionNumber).collect()
+      line.flatMap(_.split(" ")).map((_, 1)).reduceByKey(_ + _, partitionNumber).map(_._2).count()
 
     sc.stop()
   }
