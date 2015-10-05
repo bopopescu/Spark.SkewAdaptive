@@ -109,6 +109,16 @@ private[spark] class CoarseGrainedExecutorBackend(
       executor.stop()
       stop()
       rpcEnv.shutdown()
+    //10.5
+    case UseLimit(limitType,limitedTaskId,limitedComputeSpeed,limitedNetworkSpeed) =>
+      val worker = executor.skewTuneWorkerByTaskId.get(limitedTaskId)
+      logInfo(s"Driver commanded a UseLimit from $limitedTaskId/${worker.get.fetchIndex}")
+      if (worker.nonEmpty) {
+        worker.get.limitType = limitType
+        worker.get.limitedComputeSpeed = limitedComputeSpeed
+        worker.get.limitedNetworkSpeed = limitedNetworkSpeed
+      } else
+        logWarning(s"Task $limitedTaskId not exists in Executor $executorId")
       
     //9.30 SkewTuneAdd 支持fetching状态转移
     case RemoveFetchingCommand(nextExecutorId, nextTaskId, taskId, allBlocks) =>

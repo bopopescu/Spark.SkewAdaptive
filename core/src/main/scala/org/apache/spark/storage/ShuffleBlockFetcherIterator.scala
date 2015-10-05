@@ -408,6 +408,10 @@ final class ShuffleBlockFetcherIterator(
           // Only add the buffer to results queue if the iterator is not zombie,
           // i.e. cleanup() has not been called yet.
           if (!isZombie) {
+            if(worker.limitType == "network" && worker.limitedNetworkSpeed > 0){
+              logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId} 。Sleep Network ${worker.limitedNetworkSpeed}")
+              Thread.sleep(worker.limitedNetworkSpeed)
+            }
             // Increment the ref count because we need to pass this to a different thread.
             // This needs to be released after use.
             buf.retain()
@@ -673,6 +677,11 @@ final class ShuffleBlockFetcherIterator(
     currentResult = results.take()
     isLocked = false
     logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}. Take End numBlocksProcessed: $numBlocksProcessed numBlocksToFetch: $numBlocksToFetch needLock $needLock isLocked $isLocked")
+    //10.5
+    if(worker.limitType == "compute" && worker.limitedComputeSpeed > 0){
+      logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId} 。Sleep Compute ${worker.limitedComputeSpeed}")
+      Thread.sleep(worker.limitedComputeSpeed)
+    }
     val result = currentResult
     val stopFetchWait = System.currentTimeMillis()
     shuffleMetrics.incFetchWaitTime(stopFetchWait - startFetchWait)

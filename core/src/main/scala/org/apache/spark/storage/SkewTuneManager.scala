@@ -21,6 +21,10 @@ private[spark] class SkewTuneWorker(val executorID: String,
   //9.26
   var fetchIndex = 0
   var allIteratorWorkTime = 0L
+  //10.5
+  var limitType = "none"
+  var limitedComputeSpeed = 0
+  var limitedNetworkSpeed = 0
 
   def reportBlockStatuses(seq: Seq[(BlockId, Byte)], oldTaskId: Option[Long] = None, size: Option[Long] = None): Unit = {
     logInfo(s"SkewTuneWorker of task $taskId on executor $executorID : reportBlockStatuses seq $seq oldTaskId $oldTaskId")
@@ -106,6 +110,11 @@ private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager,val conf:
   val interval = conf.getInt("spark.skewtune.timeInterval",100)
   val transferFetchingBlocks = conf.getBoolean("spark.skewtune.transferFetchingBlocks",false)
   val sizeTuningRatio = conf.getDouble("spark.skewtune.sizeTuningRatio",1)
+  //10.5
+  val limitType = conf.get("spark.skewtune.limitType","none")
+  val limitedTaskId = conf.getLong("spark.skewtune.limitedTaskId",0)
+  val limitedComputeSpeed = conf.getInt("spark.skewtune.limitedComputeSpeed",500)
+  val limitedNetworkSpeed = conf.getInt("spark.skewtune.limitedNetworkSpeed",500)
 
   logInfo(s"TaskSet ${taskSetManager.name} InitMaster onlyUseSize $onlyUseSize sizeDecrease $sizeDecrease blockSizeMinLimitByByte $blockSizeMinLimitByByte 。" +
     s"advanced $advanced useResult2Fetch $useResult2Fetch interval $interval transferFetchingBlocks $transferFetchingBlocks" )

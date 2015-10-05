@@ -36,6 +36,8 @@ private[spark] object CoarseGrainedClusterMessages {
   case class KillTask(taskId: Long, executor: String, interruptThread: Boolean)
     extends CoarseGrainedClusterMessage
 
+  //10.5
+  case class UseLimit(limitType: String,limitedTaskId:Long,limitedComputeSpeed:Int,limitedNetworkSpeed:Int) extends CoarseGrainedClusterMessage
   //9.30
   case class RemoveFetchingCommand(nextExecutorId: String, nextTaskId: Long, taskId: Long, allBlocks: Seq[BlockId]) extends CoarseGrainedClusterMessage
 
