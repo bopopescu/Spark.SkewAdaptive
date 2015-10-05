@@ -28,6 +28,7 @@ import org.apache.spark.{Logging, TaskContext, TaskContextImpl}
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, HashSet, Queue}
 import scala.util.{Failure, Try}
+import collection.JavaConversions._
 
 //9.28
 /**
@@ -142,17 +143,19 @@ final class ShuffleBlockFetcherIterator(
     s"RemoteBlocks : $remoteBlocks (${blocksByAddress.filterNot(_._1 == blockManager.blockManagerId.executorId).flatMap(_._2.map(_._2)).sum}})")
 
   //10.4
-  def newUnlock(): Unit ={
+  def  newUnlock(): Unit ={
     if(needLock){
       logInfo(s"\ttask ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}。" +
         s"NewUnlock numBlocksProcessed $numBlocksProcessed numBlocksToFetch $numBlocksToFetch")
-      numBlocksToFetch -= 1
-      needLock = false
-      if(isLocked) {
-        numBlocksProcessed -= 1
-        results.add(EmptyFetchResult(null))
-        logInfo(s"\ttask ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}。" +
-        s"NewUnlock put empty result")
+      synchronized {
+        numBlocksToFetch -= 1
+        needLock = false
+        if (isLocked) {
+          numBlocksProcessed -= 1
+          results.add(EmptyFetchResult(null))
+          logInfo(s"\ttask ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId}。" +
+            s"NewUnlock put empty result")
+        }
       }
     }
   }
@@ -216,7 +219,11 @@ final class ShuffleBlockFetcherIterator(
       //9.27
       if (tmpFetch.nonEmpty){
         worker.blocks ++= tmpFetch
-        fetchRequests ++= remoteRequests
+        //10.5
+        val tmp = remoteRequests ++ fetchRequests
+        fetchRequests.clear()
+        fetchRequests = fetchRequests ++= tmp
+        //fetchRequests ++= remoteRequests
       }
       worker.reportBlockStatuses(localBlocksTmp.map(info => (info._1, SkewTuneBlockStatus.LOCAL_FETCHED)) ++ tmpFetch.map(info => (info._1, SkewTuneBlockStatus.REMOTE_FETCH_WAITING)), Some(fromTaskId), Some(localBlocksTmp.map(_._2).sum + tmpFetch.map(_._2.blockSize).sum))
       while (fetchRequests.nonEmpty &&
@@ -279,14 +286,14 @@ final class ShuffleBlockFetcherIterator(
       .map(_.asInstanceOf[SuccessFetchResult].blockId)
     val tmpResultsToAdd: Seq[BlockId] = resultsToAdd.map(_._2.blockId)
     val updateCache = new ArrayBuffer[(BlockId, Byte, Long)]()
-    //val tmpResultQueue = ArrayBuffer[FetchResult]()
+    val tmpResultQueue = ArrayBuffer[FetchResult]()
     //this.synchronized {
       resultsToAdd.filter(_._1.blockSize > 0).foreach(resultInfo => {
         val notExist = tmpResults.forall(tmpResultsToAdd.contains(_) == false)
         if (notExist) {
           totalBlocksToAdd += 1
-          results.add(resultInfo._2)
-          //tmpResultQueue += resultInfo._2
+          //results.add(resultInfo._2)
+          tmpResultQueue += resultInfo._2
           //8.22 SkewTuneAdd
           worker.blocks += ((resultInfo._1.blockId, resultInfo._1))
           updateCache += ((resultInfo._1.blockId, 0x00, resultInfo._1.blockSize))
@@ -301,12 +308,12 @@ final class ShuffleBlockFetcherIterator(
           }
         }
       })
-      /*val time = System.currentTimeMillis()
-      val originSize = results.size()
+      //val time = System.currentTimeMillis()
+      //val originSize = results.size()
       tmpResultQueue ++= results
       results.clear()
       results.addAll(tmpResultQueue)
-      logInfo(s"addResultTime ${System.currentTimeMillis() - time} ms Origin Size $originSize toAddSize ${tmpResultQueue.size}")*/
+      //logInfo(s"addResultTime ${System.currentTimeMillis() - time} ms Origin Size $originSize toAddSize ${tmpResultQueue.size}")
 
       numBlocksToFetch += totalBlocksToAdd
       /*if(needLock && isLocked) {
@@ -521,6 +528,9 @@ final class ShuffleBlockFetcherIterator(
    */
   private[this] def fetchLocalBlocks() {
     val iter = localBlocks.iterator
+    //10.5
+    val tmp = results.toArray.map(_.asInstanceOf[FetchResult])
+    results.clear()
     //10.4
     //var needNotify = false
     while (iter.hasNext) {
@@ -543,6 +553,8 @@ final class ShuffleBlockFetcherIterator(
           return
       }
     }
+    //10.5
+    results.addAll(tmp.toSeq)
     /*if(needNotify){
       synchronized {
         notifyAll()

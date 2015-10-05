@@ -12,15 +12,13 @@ object WordCount {
       System.exit(1)
     }
 
-    val partitionNumber = if(args.isDefinedAt(1)) args(1).toInt else 0
+    val partitionNumber = if(args.isDefinedAt(1)) args(1).toInt else 2
     val conf = new SparkConf()
     val sc = new SparkContext(conf)
-    val line = sc.textFile(args(0))
+    val line = sc.textFile(args(0),partitionNumber)
 
-    if(partitionNumber==0)
-      line.flatMap(_.split(" ")).map((_, 1)).reduceByKey(_ + _).map(_._2).count()
-    else
-      line.flatMap(_.split(" ")).map((_, 1)).reduceByKey(_ + _, partitionNumber).map(_._2).count()
+    val size = line.count()
+    line.flatMap(_.trim.split("\\s+")).map((_, 1)).reduceByKey(_ + _, partitionNumber).map(info => info._2/size).collect()
 
     sc.stop()
   }

@@ -105,6 +105,7 @@ private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager,val conf:
   val useResult2Fetch = conf.getBoolean("spark.skewtune.advanced.useResult2Fetch",true)
   val interval = conf.getInt("spark.skewtune.timeInterval",100)
   val transferFetchingBlocks = conf.getBoolean("spark.skewtune.transferFetchingBlocks",false)
+  val sizeTuningRatio = conf.getDouble("spark.skewtune.sizeTuningRatio",1)
 
   logInfo(s"TaskSet ${taskSetManager.name} InitMaster onlyUseSize $onlyUseSize sizeDecrease $sizeDecrease blockSizeMinLimitByByte $blockSizeMinLimitByByte 。" +
     s"advanced $advanced useResult2Fetch $useResult2Fetch interval $interval transferFetchingBlocks $transferFetchingBlocks" )
@@ -223,7 +224,7 @@ private[spark] class SkewTuneMaster(val taskSetManager: TaskSetManager,val conf:
           logInfo(s"\t\t\t[%%%]taskToSplit ${taskToSplit.get.taskId} on ${taskToSplit.get.executorId}")
           val taskTime = new mutable.HashMap[Long, Long]() ++= tasksToAddBlock.map(info => (info.taskId, timeBySeq(info.blockMap.values.toSeq, info.executorId, focusUseSize = isFirstTask)))
           logInfo(s"\t\t\t[%%%]firstTaskTime: $firstTaskTime maxTimeCostLine $maxTimeCostLine taskTime $taskTime")
-          for (block <- blocksToSchedule if firstTaskTime > maxTimeCostLine) {
+          for (block <- blocksToSchedule if firstTaskTime > (maxTimeCostLine * sizeTuningRatio).toLong) {
             logInfo(s"\t\t\t[%%%]Start Loop maxTimeCostLine $maxTimeCostLine firstTaskTime $firstTaskTime")
             logInfo(s"\t\t\t[%%%]now to process block ${block._1}(${block._2.blockState}) on ${block._2.blockManagerId.executorId} with size ${block._2.blockSize} (${block._2.blockSize/1024F/1024}MB})")
 
