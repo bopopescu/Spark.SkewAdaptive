@@ -203,13 +203,13 @@ private[spark] class ExternalSorter[K, V, C](
         maybeSpillCollection(usingMap = true)
       }
       //8.4 SortShuffle中bypassMergeSort一般为true，就是在没有aggregator的情况下，直接写磁盘
-      //9.11 生成iterator时同时生成每个record的所属的partition（getPartition(kv._1)）,
-      // 如果是hashPartition的getPartition算法为abs(key.hashCode % numPartition)，返回非负值
     } else if (bypassMergeSort) {
       // SPARK-4479: Also bypass buffering if merge sort is bypassed to avoid defensive copies
       if (records.hasNext) {
         spillToPartitionFiles(
           WritablePartitionedIterator.fromIterator(records.map { kv =>
+            //9.11 生成iterator时同时生成每个record的所属的partition（getPartition(kv._1)）,
+            // 如果是hashPartition的getPartition算法为abs(key.hashCode % numPartition)，返回非负值
             ((getPartition(kv._1), kv._1), kv._2.asInstanceOf[C])
           })
         )

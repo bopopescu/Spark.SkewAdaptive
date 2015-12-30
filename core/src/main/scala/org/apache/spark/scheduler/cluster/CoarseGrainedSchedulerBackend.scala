@@ -189,6 +189,10 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         //logInfo(s"Master : Received Command RegisterNewTask for task $taskId on Executor $executorId")
         var time = System.currentTimeMillis()
         val master = scheduler.activeTaskSets(scheduler.taskIdToTaskSetId(taskId)).master
+        if(taskId == master.limitedTaskId && (master.limitType == "network" || master.limitType == "compute")){
+          logInfo(s"on taskSetManager ${master.taskSetManager.name}: taskId: $taskId UseLimit")
+          executorDataMap(scheduler.taskIdToExecutorId(taskId)).executorEndpoint.send(UseLimit(master.limitType,master.limitedTaskId,master.limitedComputeSpeed,master.limitedNetworkSpeed))
+        }
         //9.19 SkewTuneAdd
         if(master.isRegistered.get(taskId).isEmpty){
           master.registerNewTask(taskId, executorId, seq)
@@ -208,7 +212,8 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           master.overhead_communicate += System.currentTimeMillis() - time
           master.times_communicate += 1
           time = System.currentTimeMillis()
-          if (availableMaxTaskNumberConcurrent > 0 && master.taskFinishedOrRunning  >= availableMaxTaskNumberConcurrent
+          if (availableMaxTaskNumberConcurrent > 0
+            && master.taskFinishedOrRunning  >= availableMaxTaskNumberConcurrent
           /*taskset.tasksSuccessful >= availableMaxTaskNumberConcurrent
             && taskset.successful.length - taskset.tasksSuccessful <= availableMaxTaskNumberConcurrent*/) {
             logInfo(s"on taskSetManager ${master.taskSetManager.name}: Start SkewTune Split . DemonTasks $demonTasks")

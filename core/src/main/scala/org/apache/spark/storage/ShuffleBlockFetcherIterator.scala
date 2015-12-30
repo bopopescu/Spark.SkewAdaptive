@@ -250,8 +250,8 @@ final class ShuffleBlockFetcherIterator(
           for ((blockId, size) <- request.blocks if blockToRemove._2.contains(blockId)
             && worker.blocks.contains(blockId)
             && (worker.blocks(blockId).blockState == SkewTuneBlockStatus.REMOTE_FETCH_WAITING)) {
-            tmpBlocksLeft -= ((blockId, size))
-            tmpBlocksRemove += ((blockId, size))
+            tmpBlocksLeft -= (blockId, size)
+            tmpBlocksRemove += (blockId, size)
           }
           request.blocks = tmpBlocksLeft
           returnResults += ((request.address, tmpBlocksRemove))
@@ -408,6 +408,7 @@ final class ShuffleBlockFetcherIterator(
           // Only add the buffer to results queue if the iterator is not zombie,
           // i.e. cleanup() has not been called yet.
           if (!isZombie) {
+            //10.5
             if(worker.limitType == "network" && worker.limitedNetworkSpeed > 0){
               logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId} 。Sleep Network ${worker.limitedNetworkSpeed}")
               Thread.sleep(worker.limitedNetworkSpeed)
@@ -460,7 +461,7 @@ final class ShuffleBlockFetcherIterator(
       }
     )
     //8.21 SkewTuneAdd 远程BLocks 放入等待发出Fetch请求后
-    req.blocks.foreach(block => worker.blocks(block._1).blockState = SkewTuneBlockStatus.REMOTE_FETCHING)
+    req.blocks.foreach(block => if(worker.blocks.isDefinedAt(block._1)) worker.blocks(block._1).blockState = SkewTuneBlockStatus.REMOTE_FETCHING)
     //8.23 向Master报告block status 更新
     val tmp: Seq[(BlockId, Byte)] = req.blocks.map(block => (block._1, SkewTuneBlockStatus.REMOTE_FETCHING))
     if (isTaskRegistered)
@@ -685,6 +686,11 @@ final class ShuffleBlockFetcherIterator(
     val result = currentResult
     val stopFetchWait = System.currentTimeMillis()
     shuffleMetrics.incFetchWaitTime(stopFetchWait - startFetchWait)
+
+    if(worker.limitType == "compute" && worker.limitedComputeSpeed > 0){
+      logInfo(s"task ${worker.taskId}/${worker.fetchIndex}} on Executor ${blockManager.blockManagerId.executorId} 。Sleep Compute ${worker.limitedComputeSpeed}")
+      Thread.sleep(worker.limitedComputeSpeed)
+    }
 
     result match {
       case SuccessFetchResult(_, size, _) => bytesInFlight -= size
